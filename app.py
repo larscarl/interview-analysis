@@ -56,9 +56,6 @@ def main() -> None:
     if selected_file != "None":
         text: str = normalize_line_breaks(load_text_from_selection(selected_file))
         # text: str = load_text_from_selection(selected_file)
-
-        show_text_overview(selected_file, text)
-
         (
             tab_full_text,
             tab_key_metrics,
@@ -194,17 +191,6 @@ def read_txt_file(file_path: str) -> str:
         return file.read()
 
 
-def show_text_overview(selected_file: str, text: str) -> None:
-    st.header("Text Overview")
-    # Display Selected File
-    st.subheader("Selected File")
-    # st.markdown(
-    #     f"<p style='font-size: 16px; color: gray;'><strong>{selected_file}</strong></p>",
-    #     unsafe_allow_html=True,
-    # )
-    st.text(selected_file)
-
-
 def create_tabs_text_analysis() -> Tuple[
     DeltaGenerator,
     DeltaGenerator,
@@ -254,11 +240,8 @@ def show_tab_key_metrics(text: str, tab_key_metrics: DeltaGenerator):
 
     try:
         readability_score = flesch_reading_ease(text)
-    except (ValueError, TypeError) as e:
+    except (ValueError, TypeError) as _:
         readability_score = "N/A"
-
-    # Display Metrics in Columns with style_metric_cards()
-    tab_key_metrics.subheader("Key Metrics")
 
     col1, col2, col3 = tab_key_metrics.columns(3)
     col1.metric(
@@ -433,7 +416,7 @@ def show_tab_word_frequency_bar_chart(
         top_words = word_freq_df.head(num_words)
 
         fig, ax = plt.subplots(figsize=(10, 6))
-        ax.bar(top_words["Word"], top_words["Frequency"], color="skyblue")
+        ax.bar(top_words["Word"], top_words["Frequency"], color="#408EC6")
         ax.set_xlabel("Words", fontsize=12)
         ax.set_ylabel("Frequency", fontsize=12)
         ax.set_title(f"Top {num_words} Words", fontsize=16)
@@ -464,12 +447,17 @@ def show_tab_word_frequency_table(
     word_freq_df: pd.DataFrame, tab_word_frequency_table: DeltaGenerator
 ) -> None:
     with tab_word_frequency_table:
+        # Add a column for the length of each word
+        word_freq_df["Length"] = word_freq_df["Word"].apply(len)
+
+        # Display the dataframe with the added column
         st.dataframe(
             data=word_freq_df,
             hide_index=True,
             column_config={
                 "Word": st.column_config.TextColumn("Word"),
                 "Frequency": st.column_config.NumberColumn("Frequency"),
+                "Length": st.column_config.NumberColumn("Length"),
             },
         )
 
@@ -670,7 +658,7 @@ def show_tab_sentiment_analysis_distribution(
         col, _ = st.columns([5, 1])
         fig, ax = plt.subplots(figsize=(8, 5))
         sentence_sentiments["Polarity"].hist(
-            bins=20, ax=ax, color="skyblue", edgecolor="black"
+            bins=20, ax=ax, color="#408EC6", edgecolor="black"
         )
         ax.set_title("Sentiment Polarity Distribution", fontsize=16)
         ax.set_xlabel("Polarity", fontsize=12)
@@ -906,7 +894,7 @@ def show_tab_ner_bar_chart(
             ax.bar(
                 entity_counts["Entity Type"],
                 entity_counts["Count"],
-                color="skyblue",
+                color="#408EC6",
             )
             ax.set_xlabel("Entity Types", fontsize=12)
             ax.set_ylabel("Count", fontsize=12)
