@@ -7,10 +7,17 @@ from nltk.tokenize import word_tokenize
 import nltk
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud
+from textblob import TextBlob
+
 
 # Download NLTK data (run once)
-nltk.download("stopwords")
-nltk.download("punkt")
+@st.cache_data(show_spinner=False)
+def download_nltk_data():
+    nltk.download("stopwords")
+    nltk.download("punkt")
+
+
+download_nltk_data()
 
 # Constants
 UPLOAD_DIR = "documents"
@@ -69,6 +76,27 @@ def list_files_in_subfolders(root_dir):
                 )
                 file_paths.append(relative_path)
     return sorted(file_paths, key=str.casefold)
+
+
+def analyze_sentiment(text):
+    blob = TextBlob(text)
+    sentiment_score = blob.sentiment.polarity
+    if sentiment_score > 0:
+        sentiment_label = "Positive"
+    elif sentiment_score < 0:
+        sentiment_label = "Negative"
+    else:
+        sentiment_label = "Neutral"
+    return sentiment_score, sentiment_label
+
+
+def sentence_level_sentiment(text):
+    blob = TextBlob(text)
+    sentences = blob.sentences
+    results = [
+        {"Sentence": str(s), "Polarity": s.sentiment.polarity} for s in sentences
+    ]
+    return pd.DataFrame(results)
 
 
 def main():
@@ -159,8 +187,20 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
         st.text(text[:500] + ("..." if len(text) > 500 else ""))
 
         # Tabs for analysis
-        tab_full_text, tab_word_frequency, tab_placeholder = st.tabs(
-            ["Full Text", "Word Frequency", "Other Analyses (Coming Soon)"]
+        # tab_full_text, tab_word_frequency, tab_placeholder = st.tabs(
+        #     ["Full Text", "Word Frequency", "Other Analyses (Coming Soon)"]
+        # )
+
+        # Tabs for analysis
+        tab_full_text, tab_word_frequency, tab_sentiment_analysis, tab_placeholder = (
+            st.tabs(
+                [
+                    "Full Text",
+                    "Word Frequency",
+                    "Sentiment Analysis",
+                    "Other Analyses (Coming Soon)",
+                ]
+            )
         )
 
         # Full Text Tab
@@ -188,11 +228,14 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
                 custom_stopwords=custom_stopwords,
             )
 
-            tab1, tab2, tab3 = st.tabs(["Bar Chart", "Word Cloud", "Table"])
+            (
+                tab_word_frequency_bar_chart,
+                tab_word_frequency_word_cloud,
+                tab_word_frequency_table,
+            ) = st.tabs(["Bar Chart", "Word Cloud", "Table"])
 
-            with tab1:
+            with tab_word_frequency_bar_chart:
                 # Generate and display enhanced bar chart
-                # st.subheader()
                 top_words = word_freq_df.head(num_words)
 
                 fig, ax = plt.subplots(figsize=(10, 6))
@@ -200,14 +243,18 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
                 ax.set_xlabel("Words", fontsize=12)
                 ax.set_ylabel("Frequency", fontsize=12)
                 ax.set_title(f"Top {num_words} Words", fontsize=16)
+
+                # Ensure tick positions match the number of bars
+                ax.set_xticks(range(len(top_words["Word"])))
                 ax.set_xticklabels(
                     top_words["Word"], rotation=45, ha="right", fontsize=10
                 )
+
                 for i, v in enumerate(top_words["Frequency"]):
                     ax.text(i, v + 0.5, str(v), ha="center", fontsize=10)
                 st.pyplot(fig)
 
-            with tab2:
+            with tab_word_frequency_word_cloud:
                 # Generate and display a word cloud
                 st.subheader("Word Cloud")
                 wordcloud = WordCloud(
@@ -217,7 +264,7 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
                 )
                 st.image(wordcloud.to_array(), use_container_width=True)
 
-            with tab3:
+            with tab_word_frequency_table:
                 # Display data table
                 st.dataframe(
                     data=word_freq_df,
@@ -227,6 +274,38 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
                         "Frequency": st.column_config.NumberColumn("Frequency"),
                     },
                 )
+
+        # Sentiment Analysis Tab
+        with tab_sentiment_analysis:
+            st.subheader("Sentiment Analysis")
+
+            # Overall Sentiment
+            sentiment_score, sentiment_label = analyze_sentiment(text)
+            st.metric(
+                "Overall Sentiment", sentiment_label, f"Polarity: {sentiment_score:.2f}"
+            )
+
+            tab_sentiment_analysis_sentences, tab_sentiment_analysis_distribution = (
+                st.tabs(["Sentence-Level Sentiment", "Sentiment Distribution"])
+            )
+
+            with tab_sentiment_analysis_sentences:
+                # Sentence-Level Sentiment
+                st.subheader("Sentence-Level Sentiment")
+                sentence_sentiments = sentence_level_sentiment(text)
+                st.dataframe(sentence_sentiments)
+
+            with tab_sentiment_analysis_distribution:
+                # Sentiment Distribution
+                st.subheader("Sentiment Distribution")
+                fig, ax = plt.subplots(figsize=(8, 5))
+                sentence_sentiments["Polarity"].hist(
+                    bins=20, ax=ax, color="skyblue", edgecolor="black"
+                )
+                ax.set_title("Sentiment Polarity Distribution", fontsize=16)
+                ax.set_xlabel("Polarity", fontsize=12)
+                ax.set_ylabel("Frequency", fontsize=12)
+                st.pyplot(fig)
 
         # Placeholder Tab
         with tab_placeholder:
