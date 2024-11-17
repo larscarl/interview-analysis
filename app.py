@@ -14,7 +14,9 @@ from spacy.language import Language
 from annotated_text import annotated_text
 import plotly.graph_objects as go
 import re
-
+from typing import Tuple, Dict, Any
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.decomposition import LatentDirichletAllocation
 
 # Constants
 UPLOAD_DIR: str = "documents"
@@ -48,6 +50,7 @@ def main() -> None:
     set_up_streamlit_app()
     user_uploads_file()
     selected_file: str = user_selects_file()
+    selected_language = user_selects_language_in_sidebar()
     if selected_file != "None":
         text: str = normalize_line_breaks(load_text_from_selection(selected_file))
 
@@ -58,11 +61,15 @@ def main() -> None:
             tab_word_frequency,
             tab_sentiment_analysis,
             tab_named_entity_recognition,
+            tab_topic_modeling,
         ) = create_tabs_text_analysis()
         show_tab_full_text(text, tab_full_text)
-        show_tab_word_frequency(text, tab_word_frequency)
+        show_tab_word_frequency(text, selected_language, tab_word_frequency)
         show_tab_sentiment_analysis(text, tab_sentiment_analysis)
-        show_tab_named_entity_recognition(text, tab_named_entity_recognition)
+        show_tab_named_entity_recognition(
+            text, selected_language, tab_named_entity_recognition
+        )
+        show_tab_topic_modeling(text, selected_language, tab_topic_modeling)
     else:
         st.warning("No document selected")
 
@@ -141,6 +148,17 @@ def user_selects_file() -> str:
     return selected_file
 
 
+def user_selects_language_in_sidebar() -> str:
+    """Allow the user to select the language in the sidebar."""
+    st.sidebar.header("Settings")
+    selected_language: str = st.sidebar.selectbox(
+        "Select the language for analysis",
+        list(SUPPORTED_LANGUAGES.keys()),
+        index=0,  # Default to the first language
+    )
+    return SUPPORTED_LANGUAGES[selected_language]  # Return the language code
+
+
 def list_files_in_subfolders(root_dir: str) -> list[str]:
     # Helper function to list files in subfolders
     file_paths = []
@@ -180,19 +198,23 @@ def show_text_overview(selected_file: str, text: str) -> None:
 
 
 def create_tabs_text_analysis() -> (
-    Tuple[DeltaGenerator, DeltaGenerator, DeltaGenerator, DeltaGenerator]
+    Tuple[
+        DeltaGenerator, DeltaGenerator, DeltaGenerator, DeltaGenerator, DeltaGenerator
+    ]
 ):
     (
         tab_full_text,
         tab_word_frequency,
         tab_sentiment_analysis,
         tab_named_entity_recognition,
+        tab_topic_modeling,
     ) = st.tabs(
         [
             "Full Text",
             "Word Frequency",
             "Sentiment Analysis",
             "Named Entity Recognition",
+            "Topic Modeling",
         ]
     )
 
@@ -201,6 +223,7 @@ def create_tabs_text_analysis() -> (
         tab_word_frequency,
         tab_sentiment_analysis,
         tab_named_entity_recognition,
+        tab_topic_modeling,
     )
 
 
@@ -209,13 +232,13 @@ def show_tab_full_text(text: str, tab_full_text: DeltaGenerator) -> None:
         st.text(text)
 
 
-def show_tab_word_frequency(text: str, tab_word_frequency: DeltaGenerator) -> None:
+def show_tab_word_frequency(
+    text: str, language_code: str, tab_word_frequency: DeltaGenerator
+) -> None:
     with tab_word_frequency:
         col1, col2 = st.columns([0.2, 0.8])
         # Checkbox to enable/disable stopword removal
         remove_stopwords: bool = col1.checkbox("Remove Stopwords", value=True)
-        selected_language: str = user_selects_language_for_stopword_removal(col2)
-        language_code: str = SUPPORTED_LANGUAGES[selected_language]
 
         custom_stopwords_input: str = user_selects_custom_stopwords(col2)
         custom_stopwords: set[str] = (
@@ -314,9 +337,9 @@ def show_tab_word_frequency_bar_chart(
     word_freq_df: pd.DataFrame, tab_word_frequency_bar_chart: DeltaGenerator
 ) -> None:
     with tab_word_frequency_bar_chart:
-        _, col2, _ = st.columns([1, 3, 1])
+        _, col2, _ = st.columns([1, 4, 1])
         # Allow user to specify the number of words to display
-        num_words = st.slider(
+        num_words = col2.slider(
             "Number of Words to Display", min_value=5, max_value=50, value=10
         )
         # Generate and display enhanced bar chart
@@ -341,7 +364,7 @@ def show_tab_word_frequency_word_cloud(
     word_freq_df: pd.DataFrame, tab_word_frequency_word_cloud: DeltaGenerator
 ) -> None:
     with tab_word_frequency_word_cloud:
-        _, col2, _ = st.columns([1, 3, 1])
+        _, col2, _ = st.columns([1, 4, 1])
         wordcloud = WordCloud(
             width=800, height=400, background_color="white"
         ).generate_from_frequencies(
@@ -557,7 +580,7 @@ def show_tab_sentiment_analysis_distribution(
     tab_sentiment_analysis_distribution: DeltaGenerator,
 ) -> None:
     with tab_sentiment_analysis_distribution:
-        _, col2, _ = st.columns([1, 3, 1])
+        _, col2, _ = st.columns([1, 4, 1])
         fig, ax = plt.subplots(figsize=(8, 5))
         sentence_sentiments["Polarity"].hist(
             bins=20, ax=ax, color="skyblue", edgecolor="black"
@@ -568,10 +591,11 @@ def show_tab_sentiment_analysis_distribution(
         col2.pyplot(fig)
 
 
-def show_tab_named_entity_recognition(text: str, tab_ner: DeltaGenerator) -> None:
+def show_tab_named_entity_recognition(
+    text: str, language_code: str, tab_ner: DeltaGenerator
+) -> None:
     with tab_ner:
-        ner_language: str = user_selects_language_for_ner()
-        nlp: Language = load_spacy_model(SUPPORTED_LANGUAGES[ner_language])
+        nlp: Language = load_spacy_model(language_code)
 
         entities: list[Dict[str, Any]] = extract_entities(text, nlp)
         entity_df: pd.DataFrame = pd.DataFrame(entities)
@@ -767,7 +791,7 @@ def show_tab_ner_bar_chart(
     entity_df: pd.DataFrame, tab_ner_bar_chart: DeltaGenerator
 ) -> None:
     with tab_ner_bar_chart:
-        _, col2, _ = st.columns([1, 3, 1])
+        _, col2, _ = st.columns([1, 4, 1])
         if not entity_df.empty:
             # Generate enhanced bar chart
             fig, ax = plt.subplots(figsize=(10, 6))
@@ -798,6 +822,109 @@ def show_tab_ner_bar_chart(
             col2.pyplot(fig)
         else:
             st.write("No entities found in the document.")
+
+
+def show_tab_topic_modeling(
+    text: str, language_code: str, tab_topic_modeling: DeltaGenerator
+) -> None:
+    with tab_topic_modeling:
+        st.subheader("Topic Modeling")
+        st.write(
+            "Extracted topics based on the uploaded text document (using nouns only)."
+        )
+
+        # User input for the number of topics
+        num_topics = st.slider(
+            "Select the number of topics", min_value=2, max_value=10, value=5
+        )
+
+        # Handle German umlauts if language is German
+        if language_code == "german":
+            text_cleaned = (
+                text.replace("ä", "ae")
+                .replace("ö", "oe")
+                .replace("ü", "ue")
+                .replace("ß", "ss")
+            )
+        else:
+            text_cleaned = text
+
+        # Input for custom stopwords
+        custom_stopwords_input = st.text_area(
+            "Add custom stopwords for topic modeling (comma-separated)", ""
+        )
+        custom_stopwords = [
+            stopword.strip().lower()
+            for stopword in custom_stopwords_input.split(",")
+            if stopword.strip()
+        ]
+
+        # Tokenize and preprocess the text to include only nouns
+        tokenized_text = preprocess_text_for_topic_modeling(text_cleaned, language_code)
+
+        if not tokenized_text:
+            st.warning("The text is too short or empty for topic modeling.")
+            return
+
+        # Create a document-term matrix
+        vectorizer = CountVectorizer(
+            stop_words=stopwords.words(language_code),
+            max_df=0.95,
+            min_df=2,
+        )
+
+        # Merge default and custom stopwords
+        if custom_stopwords:
+            all_stopwords = list(
+                set(vectorizer.get_stop_words()).union(custom_stopwords)
+            )
+            vectorizer.set_params(stop_words=all_stopwords)
+
+        doc_term_matrix = vectorizer.fit_transform(tokenized_text)
+
+        # Apply LDA
+        lda_model = LatentDirichletAllocation(n_components=num_topics, random_state=42)
+        lda_model.fit(doc_term_matrix)
+
+        # Extract the top words for each topic
+        topics = extract_topics(lda_model, vectorizer, top_n_words=10)
+
+        # Display the topics
+        st.write("### Topics:")
+        for topic_num, topic_words in topics.items():
+            st.write(f"**Topic {topic_num + 1}:** {', '.join(topic_words)}")
+
+
+def preprocess_text_for_topic_modeling(text: str, language_code: str) -> list[str]:
+    """Preprocess the text for topic modeling by including only nouns."""
+    # Load spaCy model for the given language
+    nlp = load_spacy_model(language_code)
+    doc = nlp(text)
+
+    # Filter only nouns and return cleaned sentences
+    cleaned_sentences = [
+        " ".join([token.text.lower() for token in sentence if token.pos_ == "NOUN"])
+        for sentence in doc.sents
+        if sentence.text.strip()
+    ]
+
+    # Remove empty strings
+    cleaned_sentences = [sentence for sentence in cleaned_sentences if sentence.strip()]
+    return cleaned_sentences
+
+
+def extract_topics(
+    lda_model, vectorizer, top_n_words: int = 10
+) -> dict[int, list[str]]:
+    """Extract the top words for each topic from the LDA model."""
+    topics = {}
+    for topic_idx, topic in enumerate(lda_model.components_):
+        top_words = [
+            vectorizer.get_feature_names_out()[i]
+            for i in topic.argsort()[-top_n_words:][::-1]
+        ]
+        topics[topic_idx] = top_words
+    return topics
 
 
 if __name__ == "__main__":
