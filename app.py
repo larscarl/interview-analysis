@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from wordcloud import WordCloud
 from textblob import TextBlob
 import spacy
+from annotated_text import annotated_text
 
 
 # Download NLTK data (run once)
@@ -377,84 +378,50 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
             with tab_named_entity_recognition_highlighting:
                 st.subheader("Entity Highlighting")
                 if not entity_df.empty:
-                    # Display the full text with all entities highlighted by default
-                    highlighted_text_segments = []
-                    last_end = 0  # Track the last end position
-
-                    # Highlight all entities by default
-                    for ent in entities:
-                        # Add the non-entity text before the current entity, preserving line breaks
-                        non_entity_text = text[last_end : ent["Start"]].replace(
-                            "\n", "<br>"
-                        )
-                        highlighted_text_segments.append(non_entity_text)
-                        # Add the entity text with highlight and tooltip for entity type
-                        highlighted_text_segments.append(
-                            f"<span style='background-color: #D3D3D3; border-radius: 3px;' title='{ent['Type']}'>"
-                            f"<b>{ent['Text']}</b></span>"
-                        )
-                        # Update the last end position
-                        last_end = ent["End"]
-
-                    # Add the remaining text after the last entity, preserving line breaks
-                    remaining_text = text[last_end:].replace("\n", "<br>")
-                    highlighted_text_segments.append(remaining_text)
-
-                    # Join the text segments into the highlighted_text
-                    highlighted_text = "".join(highlighted_text_segments)
+                    # Default to showing all entities highlighted
+                    default_selected_types = available_entity_types
 
                     # Form for entity type selection
                     with st.form("entity_type_selection"):
-                        # Multi-select for filtering
                         selected_entity_types = st.multiselect(
                             "Select entity types to highlight:",
                             options=available_entity_types,
-                            default=available_entity_types,  # Default to all entity types selected
+                            default=default_selected_types,  # Default to all entity types selected
                         )
                         # Submit button
                         submitted = st.form_submit_button("Apply")
 
-                    # Update highlights only if the form is submitted
-                    if submitted:
-                        # Filter entities based on selected types
-                        filtered_entities = [
+                    # Filter entities based on selected types
+                    filtered_entities = (
+                        [
                             ent
                             for ent in entities
                             if ent["Type"] in selected_entity_types
                         ]
+                        if submitted
+                        else entities
+                    )
 
-                        # Rebuild the text with filtered highlights
-                        highlighted_text_segments = []
-                        last_end = 0  # Track the last end position
-                        for ent in filtered_entities:
-                            # Add the non-entity text before the current entity, preserving line breaks
-                            non_entity_text = text[last_end : ent["Start"]].replace(
-                                "\n", "<br>"
-                            )
-                            highlighted_text_segments.append(non_entity_text)
-                            # Add the entity text with highlight and tooltip for entity type
-                            highlighted_text_segments.append(
-                                f"<span style='background-color: #D3D3D3; border-radius: 3px;' title='{ent['Type']}'>"
-                                f"<b>{ent['Text']}</b></span>"
-                            )
-                            # Update the last end position
-                            last_end = ent["End"]
+                    # Annotate text using `annotated_text`
+                    annotated_segments = []
+                    last_end = 0
+                    for ent in filtered_entities:
+                        # Add plain text before the entity
+                        if ent["Start"] > last_end:
+                            annotated_segments.append(text[last_end : ent["Start"]])
+                        # Add the highlighted entity
+                        annotated_segments.append((ent["Text"], ent["Type"]))
+                        last_end = ent["End"]
 
-                        # Add the remaining text after the last entity, preserving line breaks
-                        remaining_text = text[last_end:].replace("\n", "<br>")
-                        highlighted_text_segments.append(remaining_text)
+                    # Add remaining plain text after the last entity
+                    if last_end < len(text):
+                        annotated_segments.append(text[last_end:])
 
-                        # Join the text segments into the highlighted_text
-                        highlighted_text = "".join(highlighted_text_segments)
-
-                        # Show a message if no entities of the selected types are found
-                        if not filtered_entities:
-                            st.warning(
-                                f"No entities of the selected types ({', '.join(selected_entity_types)}) found."
-                            )
-
-                    # Display the text (either with or without highlights)
-                    st.markdown(highlighted_text, unsafe_allow_html=True)
+                    # Display annotated text
+                    if annotated_segments:
+                        annotated_text(*annotated_segments)
+                    else:
+                        st.warning("No entities of the selected types found.")
                 else:
                     st.write("No entities found in the document.")
 
