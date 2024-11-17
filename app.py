@@ -177,10 +177,12 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
 
     # List available files
     available_files = list_files_in_subfolders(UPLOAD_DIR)
-    selected_file = st.sidebar.selectbox("Choose a document", available_files)
+    selected_file = st.sidebar.selectbox(
+        "Choose a document", ["None"] + available_files
+    )
 
     # Display basic overview of the selected text
-    if selected_file:
+    if selected_file != "None":
         file_path = os.path.join(UPLOAD_DIR, selected_file)
         text = read_txt_file(file_path)
 
@@ -188,8 +190,6 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
         st.write(f"**Selected File:** {selected_file}")
         st.write(f"**Word Count:** {len(text.split())}")
         st.write(f"**Sentence Count:** {text.count('.')}")
-        st.write("**Preview:**")
-        st.text(text[:500] + ("..." if len(text) > 500 else ""))
 
         # Tabs for analysis
         (
@@ -197,32 +197,30 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
             tab_word_frequency,
             tab_sentiment_analysis,
             tab_named_entity_recognition,
-            tab_placeholder,
         ) = st.tabs(
             [
                 "Full Text",
                 "Word Frequency",
                 "Sentiment Analysis",
                 "Named Entity Recognition",
-                "Other Analyses (Coming Soon)",
             ]
         )
 
         # Full Text Tab
         with tab_full_text:
             st.subheader("Full Text")
-            st.text_area("Full Document", text, height=400)
+            st.markdown(text)
 
         # Inside the Word Frequency Tab
         with tab_word_frequency:
             st.subheader("Word Frequency")
 
             # Checkbox to enable/disable stopword removal
-            remove_stopwords = st.checkbox("Remove Stopwords", value=False)
+            remove_stopwords = st.checkbox("Remove Stopwords", value=True)
 
             # Display additional options only if stopword removal is enabled
             if remove_stopwords:
-                st.header("Stopword Settings")
+                st.subheader("Stopword Settings")
 
                 # Language selection
                 selected_language = st.selectbox(
@@ -249,11 +247,6 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
                 language_code = None
                 custom_stopwords = None
 
-            # Allow user to specify the number of words to display
-            num_words = st.slider(
-                "Number of Words to Display", min_value=5, max_value=50, value=10
-            )
-
             # Compute word frequency
             word_freq_df = get_word_frequency(
                 text,
@@ -269,6 +262,10 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
             ) = st.tabs(["Bar Chart", "Word Cloud", "Table"])
 
             with tab_word_frequency_bar_chart:
+                # Allow user to specify the number of words to display
+                num_words = st.slider(
+                    "Number of Words to Display", min_value=5, max_value=50, value=10
+                )
                 # Generate and display enhanced bar chart
                 top_words = word_freq_df.head(num_words)
 
@@ -356,6 +353,20 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
             # Extract entities
             entities = extract_entities(text, nlp)
             entity_df = pd.DataFrame(entities)
+            available_entity_types = sorted(
+                entity_df["Type"].unique(), key=str.casefold
+            )
+
+            # Get unique entity types and explanations
+            entity_explanations = {
+                entity: spacy.explain(entity) or "No description available"
+                for entity in available_entity_types
+            }
+
+            # Add explanations as a helper text
+            with st.expander("Show/hide explanations for entity types", expanded=True):
+                for entity, explanation in entity_explanations.items():
+                    st.caption(f"**{entity}**: {explanation}")
 
             (
                 tab_named_entity_recognition_highlighting,
@@ -366,17 +377,19 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
             with tab_named_entity_recognition_highlighting:
                 st.subheader("Entity Highlighting")
                 if not entity_df.empty:
-                    # Build the highlighted text
-                    highlighted_text = []
+                    # Display the full text with all entities highlighted by default
+                    highlighted_text_segments = []
                     last_end = 0  # Track the last end position
+
+                    # Highlight all entities by default
                     for ent in entities:
                         # Add the non-entity text before the current entity, preserving line breaks
                         non_entity_text = text[last_end : ent["Start"]].replace(
                             "\n", "<br>"
                         )
-                        highlighted_text.append(non_entity_text)
+                        highlighted_text_segments.append(non_entity_text)
                         # Add the entity text with highlight and tooltip for entity type
-                        highlighted_text.append(
+                        highlighted_text_segments.append(
                             f"<span style='background-color: #D3D3D3; border-radius: 3px;' title='{ent['Type']}'>"
                             f"<b>{ent['Text']}</b></span>"
                         )
@@ -385,18 +398,79 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
 
                     # Add the remaining text after the last entity, preserving line breaks
                     remaining_text = text[last_end:].replace("\n", "<br>")
-                    highlighted_text.append(remaining_text)
+                    highlighted_text_segments.append(remaining_text)
 
-                    # Join the text segments and display
-                    st.markdown("".join(highlighted_text), unsafe_allow_html=True)
+                    # Join the text segments into the highlighted_text
+                    highlighted_text = "".join(highlighted_text_segments)
+
+                    # Form for entity type selection
+                    with st.form("entity_type_selection"):
+                        # Multi-select for filtering
+                        selected_entity_types = st.multiselect(
+                            "Select entity types to highlight:",
+                            options=available_entity_types,
+                            default=available_entity_types,  # Default to all entity types selected
+                        )
+                        # Submit button
+                        submitted = st.form_submit_button("Apply")
+
+                    # Update highlights only if the form is submitted
+                    if submitted:
+                        # Filter entities based on selected types
+                        filtered_entities = [
+                            ent
+                            for ent in entities
+                            if ent["Type"] in selected_entity_types
+                        ]
+
+                        # Rebuild the text with filtered highlights
+                        highlighted_text_segments = []
+                        last_end = 0  # Track the last end position
+                        for ent in filtered_entities:
+                            # Add the non-entity text before the current entity, preserving line breaks
+                            non_entity_text = text[last_end : ent["Start"]].replace(
+                                "\n", "<br>"
+                            )
+                            highlighted_text_segments.append(non_entity_text)
+                            # Add the entity text with highlight and tooltip for entity type
+                            highlighted_text_segments.append(
+                                f"<span style='background-color: #D3D3D3; border-radius: 3px;' title='{ent['Type']}'>"
+                                f"<b>{ent['Text']}</b></span>"
+                            )
+                            # Update the last end position
+                            last_end = ent["End"]
+
+                        # Add the remaining text after the last entity, preserving line breaks
+                        remaining_text = text[last_end:].replace("\n", "<br>")
+                        highlighted_text_segments.append(remaining_text)
+
+                        # Join the text segments into the highlighted_text
+                        highlighted_text = "".join(highlighted_text_segments)
+
+                        # Show a message if no entities of the selected types are found
+                        if not filtered_entities:
+                            st.warning(
+                                f"No entities of the selected types ({', '.join(selected_entity_types)}) found."
+                            )
+
+                    # Display the text (either with or without highlights)
+                    st.markdown(highlighted_text, unsafe_allow_html=True)
                 else:
                     st.write("No entities found in the document.")
 
             with tab_named_entity_recognition_table:
                 # Display entities table
-                st.subheader("Entity Summary")
                 if not entity_df.empty:
-                    st.dataframe(entity_df)
+                    st.dataframe(
+                        data=entity_df,
+                        hide_index=True,
+                        column_config={
+                            "Text": st.column_config.TextColumn("Text"),
+                            "Type": st.column_config.TextColumn("Type"),
+                            "Start": st.column_config.NumberColumn("Start"),
+                            "End": st.column_config.NumberColumn("End"),
+                        },
+                    )
                     entity_counts = entity_df["Type"].value_counts().reset_index()
                     entity_counts.columns = ["Entity Type", "Count"]
                 else:
@@ -404,15 +478,35 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
 
             with tab_named_entity_recognition_bar_chart:
                 if not entity_df.empty:
-                    # Display entity type counts as a bar chart
-                    st.bar_chart(entity_counts.set_index("Entity Type"))
+                    # Generate enhanced bar chart
+                    fig, ax = plt.subplots(figsize=(10, 6))
+                    ax.bar(
+                        entity_counts["Entity Type"],
+                        entity_counts["Count"],
+                        color="skyblue",
+                    )
+                    ax.set_xlabel("Entity Types", fontsize=12)
+                    ax.set_ylabel("Count", fontsize=12)
+                    ax.set_title("Entity Type Distribution", fontsize=16)
+
+                    # Ensure tick positions match the number of bars
+                    ax.set_xticks(range(len(entity_counts["Entity Type"])))
+                    ax.set_xticklabels(
+                        entity_counts["Entity Type"],
+                        rotation=45,
+                        ha="right",
+                        fontsize=10,
+                    )
+
+                    # Add text annotations above the bars
+                    for i, v in enumerate(entity_counts["Count"]):
+                        ax.text(i, v + 0.5, str(v), ha="center", fontsize=10)
+
+                    st.pyplot(fig)
                 else:
                     st.write("No entities found in the document.")
-
-        # Placeholder Tab
-        with tab_placeholder:
-            st.subheader("Analysis Coming Soon")
-            st.write("More analysis features will be added here.")
+    else:
+        st.warning("No document selected")
 
 
 if __name__ == "__main__":
