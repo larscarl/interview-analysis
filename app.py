@@ -153,27 +153,6 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
     available_files = list_files_in_subfolders(UPLOAD_DIR)
     selected_file = st.sidebar.selectbox("Choose a document", available_files)
 
-    # Language selection
-    st.sidebar.header("Language Selection")
-    selected_language = st.sidebar.selectbox(
-        "Select the language", list(SUPPORTED_LANGUAGES.keys())
-    )
-    language_code = SUPPORTED_LANGUAGES[selected_language]
-
-    # Custom stopwords input
-    st.sidebar.header("Custom Stopwords")
-    custom_stopwords_input = st.sidebar.text_area(
-        "Add custom stopwords (comma-separated)", ""
-    )
-    custom_stopwords = (
-        set(
-            custom_stopword.strip()
-            for custom_stopword in custom_stopwords_input.split(",")
-        )
-        if custom_stopwords_input
-        else None
-    )
-
     # Display basic overview of the selected text
     if selected_file:
         file_path = os.path.join(UPLOAD_DIR, selected_file)
@@ -185,11 +164,6 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
         st.write(f"**Sentence Count:** {text.count('.')}")
         st.write("**Preview:**")
         st.text(text[:500] + ("..." if len(text) > 500 else ""))
-
-        # Tabs for analysis
-        # tab_full_text, tab_word_frequency, tab_placeholder = st.tabs(
-        #     ["Full Text", "Word Frequency", "Other Analyses (Coming Soon)"]
-        # )
 
         # Tabs for analysis
         tab_full_text, tab_word_frequency, tab_sentiment_analysis, tab_placeholder = (
@@ -212,8 +186,37 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
         with tab_word_frequency:
             st.subheader("Word Frequency")
 
-            # Add a checkbox to filter stopwords
-            remove_stopwords = st.checkbox("Remove Stopwords", value=True)
+            # Checkbox to enable/disable stopword removal
+            remove_stopwords = st.checkbox("Remove Stopwords", value=False)
+
+            # Display additional options only if stopword removal is enabled
+            if remove_stopwords:
+                st.header("Stopword Settings")
+
+                # Language selection
+                selected_language = st.selectbox(
+                    "Select the language for stopword removal",
+                    list(SUPPORTED_LANGUAGES.keys()),
+                    index=0,
+                )
+                language_code = SUPPORTED_LANGUAGES[selected_language]
+
+                # Custom stopwords input
+                custom_stopwords_input = st.text_area(
+                    "Add custom stopwords (comma-separated)", ""
+                )
+                custom_stopwords = (
+                    set(
+                        custom_stopword.strip()
+                        for custom_stopword in custom_stopwords_input.split(",")
+                    )
+                    if custom_stopwords_input
+                    else None
+                )
+            else:
+                # Default to no stopwords and language
+                language_code = None
+                custom_stopwords = None
 
             # Allow user to specify the number of words to display
             num_words = st.slider(
@@ -286,7 +289,7 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
             )
 
             tab_sentiment_analysis_sentences, tab_sentiment_analysis_distribution = (
-                st.tabs(["Sentence-Level Sentiment", "Sentiment Distribution"])
+                st.tabs(["Sentence-Level Sentiment", "Sentiment Polarity Distribution"])
             )
 
             with tab_sentiment_analysis_sentences:
