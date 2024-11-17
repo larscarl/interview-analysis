@@ -41,6 +41,7 @@ def main():
     selected_file = user_selects_file()
     if selected_file != "None":
         text = load_text_from_selection(selected_file)
+        text = normalize_line_breaks(text)
 
         show_text_overview(selected_file, text)
 
@@ -49,7 +50,7 @@ def main():
             tab_word_frequency,
             tab_sentiment_analysis,
             tab_named_entity_recognition,
-        ) = create_tabs()
+        ) = create_tabs_text_analysis()
         show_tab_full_text(text, tab_full_text)
         show_tab_word_frequency(text, tab_word_frequency)
         show_tab_sentiment_analysis(text, tab_sentiment_analysis)
@@ -107,7 +108,6 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
 """,
         },
     )
-    # Streamlit App
     st.title("Interview Analysis")
 
 
@@ -150,6 +150,10 @@ def load_text_from_selection(selected_file):
     file_path = os.path.join(UPLOAD_DIR, selected_file)
     text = read_txt_file(file_path)
 
+    return text
+
+
+def normalize_line_breaks(text):
     # Normalize line breaks: convert single newlines to double newlines for paragraph separation,
     # and collapse excessive newlines (more than two) into a maximum of two.
     text = re.sub(r"\n+", "\n\n", text)
@@ -168,7 +172,7 @@ def show_text_overview(selected_file, text):
     st.write(f"**Sentence Count:** {text.count('.')}")
 
 
-def create_tabs():
+def create_tabs_text_analysis():
     (
         tab_full_text,
         tab_word_frequency,
@@ -272,9 +276,10 @@ def get_word_frequency(
         word for word in words if word.isalnum() and word not in stop_words
     ]
     word_counts = Counter(filtered_words)
-    return pd.DataFrame(word_counts.items(), columns=["Word", "Frequency"]).sort_values(
-        by="Frequency", ascending=False
-    )
+    word_frequency_df = pd.DataFrame(
+        word_counts.items(), columns=["Word", "Frequency"]
+    ).sort_values(by="Frequency", ascending=False)
+    return word_frequency_df
 
 
 def create_tabs_word_frequency():
@@ -352,14 +357,15 @@ def show_tab_sentiment_analysis(text, tab_sentiment_analysis):
             tab_sentiment_analysis_timeline,
             tab_sentiment_analysis_distribution,
         ) = create_tabs_sentiment_analysis()
-        sentence_sentiments = show_tab_sentiment_analysis_sentences(
-            text, tab_sentiment_analysis_sentences
+        sentence_sentiments = generate_sentence_level_sentiments(text)
+        show_tab_sentiment_analysis_sentences(
+            sentence_sentiments, tab_sentiment_analysis_sentences
         )
         show_tab_sentiment_analysis_timeline(
-            tab_sentiment_analysis_timeline, sentence_sentiments
+            sentence_sentiments, tab_sentiment_analysis_timeline
         )
         show_tab_sentiment_analysis_distribution(
-            tab_sentiment_analysis_distribution, sentence_sentiments
+            sentence_sentiments, tab_sentiment_analysis_distribution
         )
 
 
@@ -395,10 +401,20 @@ def create_tabs_sentiment_analysis():
     )
 
 
-def show_tab_sentiment_analysis_sentences(text, tab_sentiment_analysis_sentences):
+def generate_sentence_level_sentiments(text):
+    blob = TextBlob(text)
+    sentences = blob.sentences
+    results = [
+        {"Sentence": str(s), "Polarity": s.sentiment.polarity} for s in sentences
+    ]
+    return pd.DataFrame(results)
+
+
+def show_tab_sentiment_analysis_sentences(
+    sentence_sentiments, tab_sentiment_analysis_sentences
+):
     with tab_sentiment_analysis_sentences:
         # Sentence-Level Sentiment
-        sentence_sentiments = sentence_level_sentiment(text)
         st.dataframe(
             data=sentence_sentiments,
             hide_index=False,
@@ -411,17 +427,8 @@ def show_tab_sentiment_analysis_sentences(text, tab_sentiment_analysis_sentences
     return sentence_sentiments
 
 
-def sentence_level_sentiment(text):
-    blob = TextBlob(text)
-    sentences = blob.sentences
-    results = [
-        {"Sentence": str(s), "Polarity": s.sentiment.polarity} for s in sentences
-    ]
-    return pd.DataFrame(results)
-
-
 def show_tab_sentiment_analysis_timeline(
-    tab_sentiment_analysis_timeline, sentence_sentiments
+    sentence_sentiments, tab_sentiment_analysis_timeline
 ):
     with tab_sentiment_analysis_timeline:
         # Extract polarity values
@@ -526,7 +533,7 @@ def show_tab_sentiment_analysis_timeline(
 
 
 def show_tab_sentiment_analysis_distribution(
-    tab_sentiment_analysis_distribution, sentence_sentiments
+    sentence_sentiments, tab_sentiment_analysis_distribution
 ):
     with tab_sentiment_analysis_distribution:
         # Sentiment Distribution
@@ -695,7 +702,6 @@ def show_tab_ner_highlighting(
                 else filtered_entities
             )
 
-            # Annotate text using `annotated_text`
             annotated_segments = []
             last_end = 0
             for ent in filtered_entities_by_type:
