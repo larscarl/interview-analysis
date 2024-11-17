@@ -1,0 +1,19 @@
+Interviewer: Merci d'avoir pris le temps de parler avec nous aujourd'hui. Pouvez-vous vous présenter?
+
+Interviewee: Bien sûr. Je m'appelle Sophie Dubois, et je suis architecte depuis huit ans.
+
+Interviewer: Qu'est-ce qui vous a inspiré à devenir architecte?
+
+Interviewee: Depuis mon enfance, j'ai toujours été fascinée par les bâtiments et leur conception. À l'université, j'ai découvert ma passion pour le design durable et l'architecture écologique.
+
+Interviewer: Pouvez-vous partager un projet difficile sur lequel vous avez travaillé?
+
+Interviewee: Un de mes projets les plus difficiles a été la construction d'une école en milieu rural. Nous avons dû gérer des contraintes budgétaires et trouver des solutions innovantes pour utiliser des matériaux locaux.
+
+Interviewer: Quels conseils donneriez-vous à quelqu'un qui veut devenir architecte?
+
+Interviewee: Travaillez dur et soyez curieux. L'architecture nécessite à la fois créativité et technique. Et surtout, n'ayez pas peur de prendre des risques pour innover.
+
+Interviewer: Merci beaucoup, Sophie.
+
+Interviewee: Merci à vous, c'était un plaisir de discuter.
