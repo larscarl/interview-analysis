@@ -8,6 +8,7 @@ import nltk
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud
 from textblob import TextBlob
+import spacy
 
 
 # Download NLTK data (run once)
@@ -99,6 +100,31 @@ def sentence_level_sentiment(text):
     return pd.DataFrame(results)
 
 
+# Load spaCy model for NER
+@st.cache_resource
+def load_spacy_model(language="en"):
+    models = {
+        "english": "en_core_web_sm",
+        "german": "de_core_news_sm",
+        "french": "fr_core_news_sm",
+    }
+    return spacy.load(models[language])
+
+
+def extract_entities(text, nlp_model):
+    doc = nlp_model(text)
+    entities = [
+        {
+            "Text": ent.text,
+            "Type": ent.label_,
+            "Start": ent.start_char,
+            "End": ent.end_char,
+        }
+        for ent in doc.ents
+    ]
+    return entities
+
+
 def main():
     # Page Config
     st.set_page_config(
@@ -166,15 +192,20 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
         st.text(text[:500] + ("..." if len(text) > 500 else ""))
 
         # Tabs for analysis
-        tab_full_text, tab_word_frequency, tab_sentiment_analysis, tab_placeholder = (
-            st.tabs(
-                [
-                    "Full Text",
-                    "Word Frequency",
-                    "Sentiment Analysis",
-                    "Other Analyses (Coming Soon)",
-                ]
-            )
+        (
+            tab_full_text,
+            tab_word_frequency,
+            tab_sentiment_analysis,
+            tab_named_entity_recognition,
+            tab_placeholder,
+        ) = st.tabs(
+            [
+                "Full Text",
+                "Word Frequency",
+                "Sentiment Analysis",
+                "Named Entity Recognition",
+                "Other Analyses (Coming Soon)",
+            ]
         )
 
         # Full Text Tab
@@ -309,6 +340,74 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
                 ax.set_xlabel("Polarity", fontsize=12)
                 ax.set_ylabel("Frequency", fontsize=12)
                 st.pyplot(fig)
+
+        # NER Tab
+        with tab_named_entity_recognition:
+            st.subheader("Named Entity Recognition")
+
+            # Language selection for NER
+            ner_language = st.selectbox(
+                "Select language for NER",
+                list(SUPPORTED_LANGUAGES.keys()),
+                index=0,
+            )
+            nlp = load_spacy_model(SUPPORTED_LANGUAGES[ner_language])
+
+            # Extract entities
+            entities = extract_entities(text, nlp)
+            entity_df = pd.DataFrame(entities)
+
+            (
+                tab_named_entity_recognition_highlighting,
+                tab_named_entity_recognition_table,
+                tab_named_entity_recognition_bar_chart,
+            ) = st.tabs(["Entity Highlighting", "Table", "Bar Chart"])
+
+            with tab_named_entity_recognition_highlighting:
+                st.subheader("Entity Highlighting")
+                if not entity_df.empty:
+                    # Build the highlighted text
+                    highlighted_text = []
+                    last_end = 0  # Track the last end position
+                    for ent in entities:
+                        # Add the non-entity text before the current entity, preserving line breaks
+                        non_entity_text = text[last_end : ent["Start"]].replace(
+                            "\n", "<br>"
+                        )
+                        highlighted_text.append(non_entity_text)
+                        # Add the entity text with highlight and tooltip for entity type
+                        highlighted_text.append(
+                            f"<span style='background-color: #D3D3D3; border-radius: 3px;' title='{ent['Type']}'>"
+                            f"<b>{ent['Text']}</b></span>"
+                        )
+                        # Update the last end position
+                        last_end = ent["End"]
+
+                    # Add the remaining text after the last entity, preserving line breaks
+                    remaining_text = text[last_end:].replace("\n", "<br>")
+                    highlighted_text.append(remaining_text)
+
+                    # Join the text segments and display
+                    st.markdown("".join(highlighted_text), unsafe_allow_html=True)
+                else:
+                    st.write("No entities found in the document.")
+
+            with tab_named_entity_recognition_table:
+                # Display entities table
+                st.subheader("Entity Summary")
+                if not entity_df.empty:
+                    st.dataframe(entity_df)
+                    entity_counts = entity_df["Type"].value_counts().reset_index()
+                    entity_counts.columns = ["Entity Type", "Count"]
+                else:
+                    st.write("No entities found in the document.")
+
+            with tab_named_entity_recognition_bar_chart:
+                if not entity_df.empty:
+                    # Display entity type counts as a bar chart
+                    st.bar_chart(entity_counts.set_index("Entity Type"))
+                else:
+                    st.write("No entities found in the document.")
 
         # Placeholder Tab
         with tab_placeholder:
