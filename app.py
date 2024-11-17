@@ -10,6 +10,8 @@ from wordcloud import WordCloud
 from textblob import TextBlob
 import spacy
 from annotated_text import annotated_text
+import plotly.graph_objects as go
+import re
 
 
 # Download NLTK data (run once)
@@ -130,35 +132,53 @@ def main():
     # Page Config
     st.set_page_config(
         page_title="Interview Analysis",
-        page_icon="🎤",
+        page_icon="📝",
         layout="wide",
         initial_sidebar_state="expanded",
         menu_items={
             "Get Help": "https://github.zhaw.ch/shmr/interview-analysis/blob/main/README.md",
             "Report a bug": "mailto:shmr@zhaw.ch",
             "About": """
-# Interview Analysis 🎤
-This app is designed to assist researchers, linguists, and professionals in analyzing interview texts. The app allows users to upload and explore interview data, providing tools for text analysis, including word frequency statistics and language-specific stopword filtering.
+# Interview Analysis 📝
+This app is designed to assist researchers, linguists, and professionals in analyzing interview or text data. It provides various tools for in-depth text analysis, including word frequency, sentiment analysis, and named entity recognition (NER), with support for multiple languages.
 
 ## Features
 - **Upload Your Files**: Upload `.txt` files and analyze them directly in the app.
+- **Text Display and Normalization**: View the entire text with paragraph normalization for better readability.
+- **Word Frequency Analysis**: Identify the most frequently used words in your text, with options to filter stopwords and add custom stopwords.
+- **Word Cloud Visualization**: Generate word clouds for a quick visual representation of word usage.
+- **Sentiment Analysis**:
+  - **Overall Sentiment**: Get the overall sentiment of the document.
+  - **Sentence-Level Analysis**: Explore the sentiment polarity for each sentence in a tabular format.
+  - **Polarity Timeline (Interactive)**: Visualize sentiment changes over the text with an interactive scatter plot and smoothed trendlines.
+  - **Sentiment Distribution**: View the polarity distribution using histograms.
+- **Named Entity Recognition (NER)**:
+  - Extract entities like names, organizations, locations, and more using advanced NLP techniques.
+  - Highlight entities directly in the text with interactive filters for entity types.
+  - Display detailed tables of extracted entities and their occurrences.
+  - View entity type distributions with bar charts.
 - **Multilingual Support**: Analyze texts in English, German, or French.
-- **Word Frequency Analysis**: Identify the most frequently used words in your interviews with visual charts.
-- **Full Text Display**: View and scroll through the complete document in a dedicated tab.
 
 ## How to Use
-1. Upload a `.txt` file or select from the available documents.
-2. Choose the analysis language (English, German, or French).
-3. Explore various tabs for insights:
-   - **Full Text**: Read the entire document.
-   - **Word Frequency**: Analyze word usage and filter stopwords dynamically.
+1. Upload a `.txt` file or select from the available example documents.
+2. Choose the analysis options you need:
+   - View the full text.
+   - Explore word frequency data with dynamic charts and tables.
+   - Perform sentiment analysis and interact with visualizations.
+   - Extract and analyze named entities interactively.
+3. Adjust settings dynamically (e.g., stopword filters, smoothing options, or entity type selection).
 
 ## Contact
 - **Help & Documentation**: [Documentation](https://github.zhaw.ch/shmr/interview-analysis/blob/main/README.md)
 - **Report Issues**: Please email [shmr@zhaw.ch](mailto:shmr@zhaw.ch) for support or bug reports.
 
 ## Credits
-Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intelligence. Powered by [Streamlit](https://streamlit.io), [NLTK](https://www.nltk.org), and open-source technologies.
+Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intelligence. Built with:
+- [Streamlit](https://streamlit.io) for the interactive web app.
+- [NLTK](https://www.nltk.org) and [TextBlob](https://textblob.readthedocs.io/en/dev/) for text analysis.
+- [spaCy](https://spacy.io) for advanced NLP and named entity recognition.
+- [Plotly](https://plotly.com) for interactive visualizations.
+- [WordCloud](https://github.com/amueller/word_cloud) for word cloud generation.
 """,
         },
     )
@@ -187,6 +207,10 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
         file_path = os.path.join(UPLOAD_DIR, selected_file)
         text = read_txt_file(file_path)
 
+        # Normalize line breaks: convert single newlines to double newlines for paragraph separation,
+        # and collapse excessive newlines (more than two) into a maximum of two.
+        text = re.sub(r"\n+", "\n\n", text)
+
         st.header("Text Overview")
         st.write(f"**Selected File:** {selected_file}")
         st.write(f"**Word Count:** {len(text.split())}")
@@ -210,7 +234,8 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
         # Full Text Tab
         with tab_full_text:
             st.subheader("Full Text")
-            st.markdown(text)
+            st.text(text)
+            # st.text(text)
 
         # Inside the Word Frequency Tab
         with tab_word_frequency:
@@ -317,15 +342,136 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
                 "Overall Sentiment", sentiment_label, f"Polarity: {sentiment_score:.2f}"
             )
 
-            tab_sentiment_analysis_sentences, tab_sentiment_analysis_distribution = (
-                st.tabs(["Sentence-Level Sentiment", "Sentiment Polarity Distribution"])
+            (
+                tab_sentiment_analysis_sentences,
+                tab_sentiment_analysis_timeline,
+                tab_sentiment_analysis_distribution,
+            ) = st.tabs(
+                [
+                    "Sentence-Level Sentiment",
+                    "Polarity Timeline",
+                    "Sentiment Polarity Distribution",
+                ]
             )
 
             with tab_sentiment_analysis_sentences:
                 # Sentence-Level Sentiment
                 st.subheader("Sentence-Level Sentiment")
                 sentence_sentiments = sentence_level_sentiment(text)
-                st.dataframe(sentence_sentiments)
+                st.dataframe(
+                    data=sentence_sentiments,
+                    hide_index=False,
+                    column_config={
+                        "Sentence": st.column_config.TextColumn("Sentence"),
+                        "Polarity": st.column_config.NumberColumn(
+                            "Polarity", step=0.01
+                        ),
+                    },
+                )
+
+            with tab_sentiment_analysis_timeline:
+                st.subheader("Polarity Timeline (Interactive)")
+
+                # Extract polarity values
+                sentence_sentiments["Position"] = range(1, len(sentence_sentiments) + 1)
+
+                # User option for smoothing
+                smoothing_window = st.slider(
+                    "Smoothing Window (Number of Sentences)",
+                    min_value=1,
+                    max_value=min(10, len(sentence_sentiments)),
+                    value=3,
+                    step=1,
+                )
+
+                # Compute moving average for polarity
+                sentence_sentiments["Smoothed_Polarity"] = (
+                    sentence_sentiments["Polarity"]
+                    .rolling(window=smoothing_window, min_periods=1, center=True)
+                    .mean()
+                )
+
+                # Create an interactive scatter plot with hover tooltips
+                fig = go.Figure()
+
+                # Add scatter points for original polarity
+                fig.add_trace(
+                    go.Scatter(
+                        x=sentence_sentiments["Position"],
+                        y=sentence_sentiments["Polarity"],
+                        mode="markers",
+                        marker=dict(
+                            color=sentence_sentiments["Polarity"],
+                            colorscale="RdYlGn",
+                            showscale=True,
+                            size=8,
+                            line=dict(color="black", width=0.5),
+                            colorbar=dict(
+                                title="Polarity",
+                                titleside="right",
+                                x=1.03,  # Position closer to the plot
+                                y=0.5,
+                                thickness=20,  # Adjust thickness
+                            ),
+                        ),
+                        name="Original Polarity",
+                        hovertemplate=(
+                            "<b>Sentence:</b> %{customdata[0]}<br>"
+                            "<b>Polarity:</b> %{y:.2f}<br>"
+                            "<b>Position:</b> %{x}<extra></extra>"
+                        ),
+                        customdata=[
+                            [sentence]
+                            for sentence in sentence_sentiments["Sentence"].to_list()
+                        ],
+                    )
+                )
+
+                # Add smoothed polarity as a line
+                fig.add_trace(
+                    go.Scatter(
+                        x=sentence_sentiments["Position"],
+                        y=sentence_sentiments["Smoothed_Polarity"],
+                        mode="lines",
+                        line=dict(color="blue", width=2),
+                        name="Smoothed Polarity",
+                    )
+                )
+
+                # Customize layout
+                fig.update_layout(
+                    xaxis=dict(
+                        title="Sentence Position",
+                        title_font=dict(size=14),
+                        tickfont=dict(size=12),
+                        range=[
+                            0,
+                            len(sentence_sentiments["Position"]),
+                        ],  # Ensure x-axis starts at 0
+                    ),
+                    yaxis=dict(
+                        title="Polarity",
+                        title_font=dict(size=14),
+                        tickfont=dict(size=12),
+                        gridcolor="lightgray",  # Horizontal grid lines
+                        gridwidth=1,  # Thickness of grid lines
+                        tickvals=[-1, -0.5, 0, 0.5, 1],  # Custom tick positions
+                        ticktext=["-1", "-0.5", "0", "0.5", "1"],  # Tick labels
+                        showgrid=True,  # Explicitly enable gridlines
+                    ),
+                    template="simple_white",
+                    legend=dict(
+                        orientation="h",
+                        yanchor="bottom",
+                        y=1.02,
+                        xanchor="center",
+                        x=0.5,
+                    ),
+                    hovermode="x unified",
+                )
+
+                # Render plot in Streamlit
+                st.plotly_chart(fig, use_container_width=True)
 
             with tab_sentiment_analysis_distribution:
                 # Sentiment Distribution
@@ -345,7 +491,7 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
 
             # Language selection for NER
             ner_language = st.selectbox(
-                "Select language for NER",
+                "Select language",
                 list(SUPPORTED_LANGUAGES.keys()),
                 index=0,
             )
@@ -367,7 +513,7 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
             # Add explanations as a helper text
             with st.expander("Show/hide explanations for entity types", expanded=True):
                 for entity, explanation in entity_explanations.items():
-                    st.caption(f"**{entity}**: {explanation}")
+                    st.write(f"**{entity}**: {explanation}")
 
             (
                 tab_named_entity_recognition_highlighting,
@@ -430,7 +576,7 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
                 if not entity_df.empty:
                     st.dataframe(
                         data=entity_df,
-                        hide_index=True,
+                        hide_index=False,
                         column_config={
                             "Text": st.column_config.TextColumn("Text"),
                             "Type": st.column_config.TextColumn("Type"),
