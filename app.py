@@ -1,5 +1,6 @@
 import streamlit as st
 from streamlit.delta_generator import DeltaGenerator
+from streamlit_extras.metric_cards import style_metric_cards
 import os
 import pandas as pd
 from collections import Counter
@@ -17,6 +18,7 @@ import re
 from typing import Tuple, Dict, Any
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
+from textstat import flesch_reading_ease
 
 # Constants
 UPLOAD_DIR: str = "documents"
@@ -53,17 +55,20 @@ def main() -> None:
     selected_language = user_selects_language_in_sidebar()
     if selected_file != "None":
         text: str = normalize_line_breaks(load_text_from_selection(selected_file))
+        # text: str = load_text_from_selection(selected_file)
 
         show_text_overview(selected_file, text)
 
         (
             tab_full_text,
+            tab_key_metrics,
             tab_word_frequency,
             tab_sentiment_analysis,
             tab_named_entity_recognition,
             tab_topic_modeling,
         ) = create_tabs_text_analysis()
         show_tab_full_text(text, tab_full_text)
+        show_tab_key_metrics(text, tab_key_metrics)
         show_tab_word_frequency(text, selected_language, tab_word_frequency)
         show_tab_sentiment_analysis(text, tab_sentiment_analysis)
         show_tab_named_entity_recognition(
@@ -139,7 +144,6 @@ def user_uploads_file() -> None:
 
 
 def user_selects_file() -> str:
-    # List available files
     available_files: list[str] = list_files_in_subfolders(UPLOAD_DIR)
     selected_file: str = st.sidebar.selectbox(
         "Choose a document", ["None"] + available_files
@@ -192,25 +196,27 @@ def read_txt_file(file_path: str) -> str:
 
 def show_text_overview(selected_file: str, text: str) -> None:
     st.header("Text Overview")
-    st.write(f"**Selected File:** {selected_file}")
-    st.write(f"**Word Count:** {len(text.split())}")
-    st.write(f"**Sentence Count:** {text.count('.')}")
+    # Display Selected File
+    st.subheader("Selected File")
+    # st.markdown(
+    #     f"<p style='font-size: 16px; color: gray;'><strong>{selected_file}</strong></p>",
+    #     unsafe_allow_html=True,
+    # )
+    st.text(selected_file)
 
 
-def create_tabs_text_analysis() -> (
-    Tuple[
-        DeltaGenerator, DeltaGenerator, DeltaGenerator, DeltaGenerator, DeltaGenerator
-    ]
-):
-    (
-        tab_full_text,
-        tab_word_frequency,
-        tab_sentiment_analysis,
-        tab_named_entity_recognition,
-        tab_topic_modeling,
-    ) = st.tabs(
+def create_tabs_text_analysis() -> Tuple[
+    DeltaGenerator,
+    DeltaGenerator,
+    DeltaGenerator,
+    DeltaGenerator,
+    DeltaGenerator,
+    DeltaGenerator,
+]:
+    return st.tabs(
         [
             "Full Text",
+            "Key Metrics",
             "Word Frequency",
             "Sentiment Analysis",
             "Named Entity Recognition",
@@ -218,18 +224,97 @@ def create_tabs_text_analysis() -> (
         ]
     )
 
-    return (
-        tab_full_text,
-        tab_word_frequency,
-        tab_sentiment_analysis,
-        tab_named_entity_recognition,
-        tab_topic_modeling,
-    )
-
 
 def show_tab_full_text(text: str, tab_full_text: DeltaGenerator) -> None:
     with tab_full_text:
         st.text(text)
+
+
+def show_tab_key_metrics(text: str, tab_key_metrics: DeltaGenerator):
+    # Compute Metrics
+    total_characters = len(text)
+    total_characters_no_spaces = len(text.replace(" ", ""))
+    paragraphs = text.split("\n\n")
+    paragraph_count = len([p for p in paragraphs if p.strip()])
+    sentences = re.split(r"[.!?]", text)
+    sentences = [s.strip() for s in sentences if s.strip()]
+    sentence_count = len(sentences)
+    average_sentence_length = (
+        sum(len(s.split()) for s in sentences) / sentence_count
+        if sentence_count > 0
+        else 0
+    )
+    words = [word for word in text.split() if word.isalnum()]
+    word_count = len(words)
+    average_word_length = (
+        sum(len(word) for word in words) / word_count if word_count > 0 else 0
+    )
+    unique_words = set(words)
+    vocabulary_richness = len(unique_words) / word_count * 100 if word_count > 0 else 0
+
+    try:
+        readability_score = flesch_reading_ease(text)
+    except (ValueError, TypeError) as e:
+        readability_score = "N/A"
+
+    # Display Metrics in Columns with style_metric_cards()
+    tab_key_metrics.subheader("Key Metrics")
+
+    col1, col2, col3 = tab_key_metrics.columns(3)
+    col1.metric(
+        label="Word Count",
+        value=format_with_apostrophe(word_count),
+        help="Total number of words in the text, including all valid alphanumeric tokens.",
+    )
+    col1.metric(
+        label="Characters (with spaces)",
+        value=format_with_apostrophe(total_characters),
+        help="Total number of characters in the text, including spaces.",
+    )
+    col1.metric(
+        label="Avg. Word Length (characters)",
+        value=f"{average_word_length:.2f}",
+        help="Average length of a word, calculated as the total number of characters divided by the total number of words.",
+    )
+
+    col2.metric(
+        label="Sentence Count",
+        value=format_with_apostrophe(sentence_count),
+        help="Total number of sentences, detected by splitting text on '.', '!', and '?'.",
+    )
+    col2.metric(
+        label="Characters (no spaces)",
+        value=format_with_apostrophe(total_characters_no_spaces),
+        help="Total number of characters in the text, excluding spaces.",
+    )
+    col2.metric(
+        label="Vocabulary Richness",
+        value=f"{vocabulary_richness:.2f}%",
+        help="Percentage of unique words compared to the total word count.",
+    )
+
+    col3.metric(
+        label="Paragraph Count",
+        value=format_with_apostrophe(paragraph_count),
+        help="Total number of paragraphs, detected by splitting the text on double newlines.",
+    )
+    col3.metric(
+        label="Avg. Sentence Length (words)",
+        value=f"{average_sentence_length:.2f}",
+        help="Average length of a sentence, calculated as the total number of words divided by the total number of sentences.",
+    )
+    col3.metric(
+        label="Flesch Reading Ease",
+        value=readability_score if readability_score != "N/A" else "N/A",
+        help="A score representing the readability of the text; higher values indicate easier readability.",
+    )
+
+    # Apply styling
+    style_metric_cards()
+
+
+def format_with_apostrophe(number: int) -> str:
+    return f"{number:,}".replace(",", "'")
 
 
 def show_tab_word_frequency(
@@ -240,7 +325,9 @@ def show_tab_word_frequency(
         # Checkbox to enable/disable stopword removal
         remove_stopwords: bool = col1.checkbox("Remove Stopwords", value=True)
 
-        custom_stopwords_input: str = user_selects_custom_stopwords(col2)
+        custom_stopwords_input: str = user_selects_custom_stopwords(
+            col2, remove_stopwords
+        )
         custom_stopwords: set[str] = (
             generate_stopwords_from_selection(custom_stopwords_input)
             if custom_stopwords_input
@@ -285,9 +372,9 @@ def generate_stopwords_from_selection(custom_stopwords_input: str) -> set[str]:
     )
 
 
-def user_selects_custom_stopwords(col2: DeltaGenerator) -> str:
+def user_selects_custom_stopwords(col2: DeltaGenerator, disabled: bool) -> str:
     custom_stopwords_input: str = col2.text_area(
-        "Add custom stopwords (comma-separated)", ""
+        "Add custom stopwords (comma-separated)", "", disabled=not disabled
     )
 
     return custom_stopwords_input
@@ -337,9 +424,9 @@ def show_tab_word_frequency_bar_chart(
     word_freq_df: pd.DataFrame, tab_word_frequency_bar_chart: DeltaGenerator
 ) -> None:
     with tab_word_frequency_bar_chart:
-        _, col2, _ = st.columns([1, 4, 1])
+        col, _ = st.columns([5, 1])
         # Allow user to specify the number of words to display
-        num_words = col2.slider(
+        num_words = col.slider(
             "Number of Words to Display", min_value=5, max_value=50, value=10
         )
         # Generate and display enhanced bar chart
@@ -357,20 +444,20 @@ def show_tab_word_frequency_bar_chart(
 
         for i, v in enumerate(top_words["Frequency"]):
             ax.text(i, v + 0.5, str(v), ha="center", fontsize=10)
-        col2.pyplot(fig)
+        col.pyplot(fig)
 
 
 def show_tab_word_frequency_word_cloud(
     word_freq_df: pd.DataFrame, tab_word_frequency_word_cloud: DeltaGenerator
 ) -> None:
     with tab_word_frequency_word_cloud:
-        _, col2, _ = st.columns([1, 4, 1])
+        col, _ = st.columns([5, 1])
         wordcloud = WordCloud(
             width=800, height=400, background_color="white"
         ).generate_from_frequencies(
             dict(zip(word_freq_df["Word"], word_freq_df["Frequency"]))
         )
-        col2.image(wordcloud.to_array(), use_container_width=True)
+        col.image(wordcloud.to_array(), use_container_width=True)
 
 
 def show_tab_word_frequency_table(
@@ -392,10 +479,10 @@ def show_tab_sentiment_analysis(
 ) -> None:
     with tab_sentiment_analysis:
         # Overall Sentiment
-        sentiment_score, sentiment_label = analyze_sentiment(text)
-        st.metric(
-            "Overall Sentiment", sentiment_label, f"Polarity: {sentiment_score:.2f}"
-        )
+        # sentiment_score, sentiment_label = analyze_sentiment(text)
+        # st.metric(
+        #     "Overall Sentiment", sentiment_label, f"Polarity: {sentiment_score:.2f}"
+        # )
         (
             tab_sentiment_analysis_sentences,
             tab_sentiment_analysis_timeline,
@@ -580,7 +667,7 @@ def show_tab_sentiment_analysis_distribution(
     tab_sentiment_analysis_distribution: DeltaGenerator,
 ) -> None:
     with tab_sentiment_analysis_distribution:
-        _, col2, _ = st.columns([1, 4, 1])
+        col, _ = st.columns([5, 1])
         fig, ax = plt.subplots(figsize=(8, 5))
         sentence_sentiments["Polarity"].hist(
             bins=20, ax=ax, color="skyblue", edgecolor="black"
@@ -588,7 +675,7 @@ def show_tab_sentiment_analysis_distribution(
         ax.set_title("Sentiment Polarity Distribution", fontsize=16)
         ax.set_xlabel("Polarity", fontsize=12)
         ax.set_ylabel("Frequency", fontsize=12)
-        col2.pyplot(fig)
+        col.pyplot(fig)
 
 
 def show_tab_named_entity_recognition(
@@ -709,10 +796,28 @@ def get_entity_type_explanations(available_entity_types: list[str]) -> Dict[str,
     return explanations
 
 
+# def show_or_hide_entity_explanations(entity_explanations: Dict[str, str]) -> None:
+#     with st.expander("Show/hide explanations for entity types", expanded=True):
+#         for entity, explanation in entity_explanations.items():
+#             st.write(f"**{entity}**: {explanation}")
 def show_or_hide_entity_explanations(entity_explanations: Dict[str, str]) -> None:
     with st.expander("Show/hide explanations for entity types", expanded=True):
-        for entity, explanation in entity_explanations.items():
-            st.write(f"**{entity}**: {explanation}")
+        # Create two columns dynamically
+        col1, col2 = st.columns(2)
+
+        # Split the entity explanations into two equal parts
+        entities = list(entity_explanations.items())
+        mid_index = len(entities) // 2 + (len(entities) % 2)
+
+        # Display the first half in the first column
+        with col1:
+            for entity, explanation in entities[:mid_index]:
+                st.write(f"**{entity}**: {explanation}")
+
+        # Display the second half in the second column
+        with col2:
+            for entity, explanation in entities[mid_index:]:
+                st.write(f"**{entity}**: {explanation}")
 
 
 def show_tab_ner_highlighting(
@@ -727,10 +832,11 @@ def show_tab_ner_highlighting(
             default_selected_types: list[str] = available_entity_types
 
             with st.form("entity_type_selection"):
-                selected_entity_types = st.multiselect(
+                selected_entity_types = st.pills(
                     "Select entity types to highlight:",
                     options=available_entity_types,
-                    default=default_selected_types,  # Default to all entity types selected
+                    default=default_selected_types,
+                    selection_mode="multi",
                 )
                 submitted = st.form_submit_button("Apply")
 
@@ -791,7 +897,7 @@ def show_tab_ner_bar_chart(
     entity_df: pd.DataFrame, tab_ner_bar_chart: DeltaGenerator
 ) -> None:
     with tab_ner_bar_chart:
-        _, col2, _ = st.columns([1, 4, 1])
+        col, _ = st.columns([5, 1])
         if not entity_df.empty:
             # Generate enhanced bar chart
             fig, ax = plt.subplots(figsize=(10, 6))
@@ -819,7 +925,7 @@ def show_tab_ner_bar_chart(
             for i, v in enumerate(entity_counts["Count"]):
                 ax.text(i, v + 0.5, str(v), ha="center", fontsize=10)
 
-            col2.pyplot(fig)
+            col.pyplot(fig)
         else:
             st.write("No entities found in the document.")
 
@@ -828,14 +934,17 @@ def show_tab_topic_modeling(
     text: str, language_code: str, tab_topic_modeling: DeltaGenerator
 ) -> None:
     with tab_topic_modeling:
-        st.subheader("Topic Modeling")
         st.write(
             "Extracted topics based on the uploaded text document (using nouns only)."
         )
 
+        col1, col2 = st.columns(2)
         # User input for the number of topics
-        num_topics = st.slider(
+        num_topics = col1.number_input(
             "Select the number of topics", min_value=2, max_value=10, value=5
+        )
+        num_words = col2.number_input(
+            "Select the number of words per topic", min_value=2, max_value=12, value=10
         )
 
         # Handle German umlauts if language is German
@@ -887,7 +996,7 @@ def show_tab_topic_modeling(
         lda_model.fit(doc_term_matrix)
 
         # Extract the top words for each topic
-        topics = extract_topics(lda_model, vectorizer, top_n_words=10)
+        topics = extract_topics(lda_model, vectorizer, top_n_words=num_words)
 
         # Display the topics
         st.write("### Topics:")
