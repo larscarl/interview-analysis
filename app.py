@@ -1,4 +1,5 @@
 import streamlit as st
+from streamlit.delta_generator import DeltaGenerator
 import os
 import pandas as pd
 from collections import Counter
@@ -9,39 +10,46 @@ import matplotlib.pyplot as plt
 from wordcloud import WordCloud
 from textblob import TextBlob
 import spacy
+from spacy.language import Language
 from annotated_text import annotated_text
 import plotly.graph_objects as go
 import re
 
 
 # Constants
-UPLOAD_DIR = "documents"
-USER_UPLOADS_DIR = os.path.join(UPLOAD_DIR, "user_uploads")
-EXAMPLE_DIR = os.path.join(UPLOAD_DIR, "IrishWomenWWII")
+UPLOAD_DIR: str = "documents"
+USER_UPLOADS_DIR: str = os.path.join(UPLOAD_DIR, "user_uploads")
+EXAMPLE_DIR: str = os.path.join(UPLOAD_DIR, "IrishWomenWWII")
 
 # Ensure the directory exists
 os.makedirs(USER_UPLOADS_DIR, exist_ok=True)
 os.makedirs(EXAMPLE_DIR, exist_ok=True)
 
 # Supported languages and their corresponding stopwords in NLTK
-SUPPORTED_LANGUAGES = {
+SUPPORTED_LANGUAGES: dict[str, str] = {
     "English": "english",
     "German": "german",
     "French": "french",
 }
 
-# Load stopwords
-STOPWORDS = set(stopwords.words("english"))
+
+@st.cache_data(show_spinner=False)
+def download_nltk_data() -> None:
+    nltk.download("stopwords")
+    nltk.download("punkt")
 
 
-def main():
-    download_nltk_data()
+download_nltk_data()
+
+STOPWORDS: set[str] = set(stopwords.words("english"))
+
+
+def main() -> None:
     set_up_streamlit_app()
     user_uploads_file()
-    selected_file = user_selects_file()
+    selected_file: str = user_selects_file()
     if selected_file != "None":
-        text = load_text_from_selection(selected_file)
-        text = normalize_line_breaks(text)
+        text: str = normalize_line_breaks(load_text_from_selection(selected_file))
 
         show_text_overview(selected_file, text)
 
@@ -59,7 +67,7 @@ def main():
         st.warning("No document selected")
 
 
-def set_up_streamlit_app():
+def set_up_streamlit_app() -> None:
     st.set_page_config(
         page_title="Interview Analysis",
         page_icon="📝",
@@ -111,7 +119,7 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
     st.title("Interview Analysis")
 
 
-def user_uploads_file():
+def user_uploads_file() -> None:
     st.sidebar.header("File Selection")
     uploaded_file = st.sidebar.file_uploader("Upload a .txt file", type=["txt"])
 
@@ -123,17 +131,17 @@ def user_uploads_file():
         st.sidebar.success(f"File '{uploaded_file.name}' uploaded successfully!")
 
 
-def user_selects_file():
+def user_selects_file() -> str:
     # List available files
-    available_files = list_files_in_subfolders(UPLOAD_DIR)
-    selected_file = st.sidebar.selectbox(
+    available_files: list[str] = list_files_in_subfolders(UPLOAD_DIR)
+    selected_file: str = st.sidebar.selectbox(
         "Choose a document", ["None"] + available_files
     )
 
     return selected_file
 
 
-def list_files_in_subfolders(root_dir):
+def list_files_in_subfolders(root_dir: str) -> list[str]:
     # Helper function to list files in subfolders
     file_paths = []
     for folder_name, subfolders, filenames in os.walk(root_dir):
@@ -146,33 +154,34 @@ def list_files_in_subfolders(root_dir):
     return sorted(file_paths, key=str.casefold)
 
 
-def load_text_from_selection(selected_file):
+def load_text_from_selection(selected_file: str) -> str:
     file_path = os.path.join(UPLOAD_DIR, selected_file)
     text = read_txt_file(file_path)
-
     return text
 
 
-def normalize_line_breaks(text):
+def normalize_line_breaks(text: str):
     # Normalize line breaks: convert single newlines to double newlines for paragraph separation,
     # and collapse excessive newlines (more than two) into a maximum of two.
     text = re.sub(r"\n+", "\n\n", text)
     return text
 
 
-def read_txt_file(file_path):
+def read_txt_file(file_path: str) -> str:
     with open(file_path, "r", encoding="utf-8") as file:
         return file.read()
 
 
-def show_text_overview(selected_file, text):
+def show_text_overview(selected_file: str, text: str) -> None:
     st.header("Text Overview")
     st.write(f"**Selected File:** {selected_file}")
     st.write(f"**Word Count:** {len(text.split())}")
     st.write(f"**Sentence Count:** {text.count('.')}")
 
 
-def create_tabs_text_analysis():
+def create_tabs_text_analysis() -> (
+    Tuple[DeltaGenerator, DeltaGenerator, DeltaGenerator, DeltaGenerator]
+):
     (
         tab_full_text,
         tab_word_frequency,
@@ -195,21 +204,21 @@ def create_tabs_text_analysis():
     )
 
 
-def show_tab_full_text(text, tab_full_text):
+def show_tab_full_text(text: str, tab_full_text: DeltaGenerator) -> None:
     with tab_full_text:
         st.text(text)
 
 
-def show_tab_word_frequency(text, tab_word_frequency):
+def show_tab_word_frequency(text: str, tab_word_frequency: DeltaGenerator) -> None:
     with tab_word_frequency:
         col1, col2 = st.columns([0.2, 0.8])
         # Checkbox to enable/disable stopword removal
-        remove_stopwords = col1.checkbox("Remove Stopwords", value=True)
-        selected_language = user_selects_language_for_stopword_removal(col2)
-        language_code = SUPPORTED_LANGUAGES[selected_language]
+        remove_stopwords: bool = col1.checkbox("Remove Stopwords", value=True)
+        selected_language: str = user_selects_language_for_stopword_removal(col2)
+        language_code: str = SUPPORTED_LANGUAGES[selected_language]
 
-        custom_stopwords_input = user_selects_custom_stopwords(col2)
-        custom_stopwords = (
+        custom_stopwords_input: str = user_selects_custom_stopwords(col2)
+        custom_stopwords: set[str] = (
             generate_stopwords_from_selection(custom_stopwords_input)
             if custom_stopwords_input
             else None
@@ -221,7 +230,7 @@ def show_tab_word_frequency(text, tab_word_frequency):
             custom_stopwords = None
 
             # Compute word frequency
-        word_freq_df = get_word_frequency(
+        word_freq_df: pd.DataFrame = get_word_frequency(
             text,
             language=language_code,
             remove_stopwords=remove_stopwords,
@@ -237,8 +246,8 @@ def show_tab_word_frequency(text, tab_word_frequency):
         show_tab_word_frequency_table(word_freq_df, tab_word_frequency_table)
 
 
-def user_selects_language_for_stopword_removal(col2):
-    selected_language = col2.selectbox(
+def user_selects_language_for_stopword_removal(col2: DeltaGenerator) -> str:
+    selected_language: str = col2.selectbox(
         "Select the language for stopword removal",
         list(SUPPORTED_LANGUAGES.keys()),
         index=0,
@@ -247,14 +256,14 @@ def user_selects_language_for_stopword_removal(col2):
     return selected_language
 
 
-def generate_stopwords_from_selection(custom_stopwords_input):
+def generate_stopwords_from_selection(custom_stopwords_input: str) -> set[str]:
     return set(
         custom_stopword.strip() for custom_stopword in custom_stopwords_input.split(",")
     )
 
 
-def user_selects_custom_stopwords(col2):
-    custom_stopwords_input = col2.text_area(
+def user_selects_custom_stopwords(col2: DeltaGenerator) -> str:
+    custom_stopwords_input: str = col2.text_area(
         "Add custom stopwords (comma-separated)", ""
     )
 
@@ -262,11 +271,14 @@ def user_selects_custom_stopwords(col2):
 
 
 def get_word_frequency(
-    text, language="english", remove_stopwords=False, custom_stopwords=None
-):
+    text: str,
+    language: str = "english",
+    remove_stopwords: bool = False,
+    custom_stopwords: set[str] = None,
+) -> pd.DataFrame:
     # Function to get word frequency with optional stopwords removal
-    words = word_tokenize(text.lower())
-    stop_words = set(stopwords.words(language)) if remove_stopwords else set()
+    words: list[str] = word_tokenize(text.lower())
+    stop_words: set[str] = set(stopwords.words(language)) if remove_stopwords else set()
 
     # Add custom stopwords if provided
     if custom_stopwords:
@@ -276,13 +288,15 @@ def get_word_frequency(
         word for word in words if word.isalnum() and word not in stop_words
     ]
     word_counts = Counter(filtered_words)
-    word_frequency_df = pd.DataFrame(
+    word_frequency_df: pd.DataFrame = pd.DataFrame(
         word_counts.items(), columns=["Word", "Frequency"]
     ).sort_values(by="Frequency", ascending=False)
     return word_frequency_df
 
 
-def create_tabs_word_frequency():
+def create_tabs_word_frequency() -> (
+    Tuple[DeltaGenerator, DeltaGenerator, DeltaGenerator]
+):
     (
         tab_word_frequency_bar_chart,
         tab_word_frequency_word_cloud,
@@ -296,8 +310,11 @@ def create_tabs_word_frequency():
     )
 
 
-def show_tab_word_frequency_bar_chart(word_freq_df, tab_word_frequency_bar_chart):
+def show_tab_word_frequency_bar_chart(
+    word_freq_df: pd.DataFrame, tab_word_frequency_bar_chart: DeltaGenerator
+) -> None:
     with tab_word_frequency_bar_chart:
+        _, col2, _ = st.columns([1, 3, 1])
         # Allow user to specify the number of words to display
         num_words = st.slider(
             "Number of Words to Display", min_value=5, max_value=50, value=10
@@ -317,24 +334,26 @@ def show_tab_word_frequency_bar_chart(word_freq_df, tab_word_frequency_bar_chart
 
         for i, v in enumerate(top_words["Frequency"]):
             ax.text(i, v + 0.5, str(v), ha="center", fontsize=10)
-        st.pyplot(fig)
+        col2.pyplot(fig)
 
 
-def show_tab_word_frequency_word_cloud(word_freq_df, tab_word_frequency_word_cloud):
+def show_tab_word_frequency_word_cloud(
+    word_freq_df: pd.DataFrame, tab_word_frequency_word_cloud: DeltaGenerator
+) -> None:
     with tab_word_frequency_word_cloud:
-        # Generate and display a word cloud
-        st.subheader("Word Cloud")
+        _, col2, _ = st.columns([1, 3, 1])
         wordcloud = WordCloud(
             width=800, height=400, background_color="white"
         ).generate_from_frequencies(
             dict(zip(word_freq_df["Word"], word_freq_df["Frequency"]))
         )
-        st.image(wordcloud.to_array(), use_container_width=True)
+        col2.image(wordcloud.to_array(), use_container_width=True)
 
 
-def show_tab_word_frequency_table(word_freq_df, tab_word_frequency_table):
+def show_tab_word_frequency_table(
+    word_freq_df: pd.DataFrame, tab_word_frequency_table: DeltaGenerator
+) -> None:
     with tab_word_frequency_table:
-        # Display data table
         st.dataframe(
             data=word_freq_df,
             hide_index=True,
@@ -345,7 +364,9 @@ def show_tab_word_frequency_table(word_freq_df, tab_word_frequency_table):
         )
 
 
-def show_tab_sentiment_analysis(text, tab_sentiment_analysis):
+def show_tab_sentiment_analysis(
+    text: str, tab_sentiment_analysis: DeltaGenerator
+) -> None:
     with tab_sentiment_analysis:
         # Overall Sentiment
         sentiment_score, sentiment_label = analyze_sentiment(text)
@@ -357,7 +378,7 @@ def show_tab_sentiment_analysis(text, tab_sentiment_analysis):
             tab_sentiment_analysis_timeline,
             tab_sentiment_analysis_distribution,
         ) = create_tabs_sentiment_analysis()
-        sentence_sentiments = generate_sentence_level_sentiments(text)
+        sentence_sentiments: pd.DataFrame = generate_sentence_level_sentiments(text)
         show_tab_sentiment_analysis_sentences(
             sentence_sentiments, tab_sentiment_analysis_sentences
         )
@@ -369,7 +390,7 @@ def show_tab_sentiment_analysis(text, tab_sentiment_analysis):
         )
 
 
-def analyze_sentiment(text):
+def analyze_sentiment(text: str) -> Tuple[float, str]:
     blob = TextBlob(text)
     sentiment_score = blob.sentiment.polarity
     if sentiment_score > 0:
@@ -381,7 +402,9 @@ def analyze_sentiment(text):
     return sentiment_score, sentiment_label
 
 
-def create_tabs_sentiment_analysis():
+def create_tabs_sentiment_analysis() -> (
+    Tuple[DeltaGenerator, DeltaGenerator, DeltaGenerator]
+):
     (
         tab_sentiment_analysis_sentences,
         tab_sentiment_analysis_timeline,
@@ -401,7 +424,7 @@ def create_tabs_sentiment_analysis():
     )
 
 
-def generate_sentence_level_sentiments(text):
+def generate_sentence_level_sentiments(text: str) -> pd.DataFrame:
     blob = TextBlob(text)
     sentences = blob.sentences
     results = [
@@ -411,10 +434,9 @@ def generate_sentence_level_sentiments(text):
 
 
 def show_tab_sentiment_analysis_sentences(
-    sentence_sentiments, tab_sentiment_analysis_sentences
-):
+    sentence_sentiments: pd.DataFrame, tab_sentiment_analysis_sentences: DeltaGenerator
+) -> None:
     with tab_sentiment_analysis_sentences:
-        # Sentence-Level Sentiment
         st.dataframe(
             data=sentence_sentiments,
             hide_index=False,
@@ -424,12 +446,10 @@ def show_tab_sentiment_analysis_sentences(
             },
         )
 
-    return sentence_sentiments
-
 
 def show_tab_sentiment_analysis_timeline(
-    sentence_sentiments, tab_sentiment_analysis_timeline
-):
+    sentence_sentiments: pd.DataFrame, tab_sentiment_analysis_timeline: DeltaGenerator
+) -> None:
     with tab_sentiment_analysis_timeline:
         # Extract polarity values
         sentence_sentiments["Position"] = range(1, len(sentence_sentiments) + 1)
@@ -533,10 +553,11 @@ def show_tab_sentiment_analysis_timeline(
 
 
 def show_tab_sentiment_analysis_distribution(
-    sentence_sentiments, tab_sentiment_analysis_distribution
-):
+    sentence_sentiments: pd.DataFrame,
+    tab_sentiment_analysis_distribution: DeltaGenerator,
+) -> None:
     with tab_sentiment_analysis_distribution:
-        # Sentiment Distribution
+        _, col2, _ = st.columns([1, 3, 1])
         fig, ax = plt.subplots(figsize=(8, 5))
         sentence_sentiments["Polarity"].hist(
             bins=20, ax=ax, color="skyblue", edgecolor="black"
@@ -544,32 +565,33 @@ def show_tab_sentiment_analysis_distribution(
         ax.set_title("Sentiment Polarity Distribution", fontsize=16)
         ax.set_xlabel("Polarity", fontsize=12)
         ax.set_ylabel("Frequency", fontsize=12)
-        st.pyplot(fig)
+        col2.pyplot(fig)
 
 
-def show_tab_named_entity_recognition(text, tab_ner):
+def show_tab_named_entity_recognition(text: str, tab_ner: DeltaGenerator) -> None:
     with tab_ner:
-        # Language selection for NER
-        ner_language = user_selects_language_for_ner()
-        nlp = load_spacy_model(SUPPORTED_LANGUAGES[ner_language])
+        ner_language: str = user_selects_language_for_ner()
+        nlp: Language = load_spacy_model(SUPPORTED_LANGUAGES[ner_language])
 
-        entities = extract_entities(text, nlp)
-        entity_df = pd.DataFrame(entities)
+        entities: list[Dict[str, Any]] = extract_entities(text, nlp)
+        entity_df: pd.DataFrame = pd.DataFrame(entities)
 
-        custom_exclusions = user_selects_custom_exclusions()
+        custom_exclusions: list[str] = user_selects_custom_exclusions()
 
         if custom_exclusions:
-            entity_df = filter_excluded_entities(entities, custom_exclusions)
+            filtered_entities, entity_df = filter_excluded_entities(
+                entities, custom_exclusions
+            )
         else:
-            filtered_entities = entities  # No exclusions applied
+            filtered_entities: list[Dict[str, Any]] = entities  # No exclusions applied
 
         if not entity_df.empty:
-            available_entity_types = get_entity_types(entity_df)
+            available_entity_types: list[str] = get_entity_types(entity_df)
 
-            # Get unique entity types and explanations
-            explanations = get_entity_type_explanations(available_entity_types)
+            explanations: Dict[str, str] = get_entity_type_explanations(
+                available_entity_types
+            )
 
-            # Add explanations as a helper text
             show_or_hide_entity_explanations(explanations)
 
             (
@@ -591,8 +613,8 @@ def show_tab_named_entity_recognition(text, tab_ner):
             st.warning("No entities available after applying exclusions.")
 
 
-def user_selects_language_for_ner():
-    ner_language = st.selectbox(
+def user_selects_language_for_ner() -> str:
+    ner_language: str = st.selectbox(
         "Select language",
         list(SUPPORTED_LANGUAGES.keys()),
         index=0,
@@ -602,8 +624,7 @@ def user_selects_language_for_ner():
 
 
 @st.cache_resource
-def load_spacy_model(language="en"):
-    # Load spaCy model for NER
+def load_spacy_model(language: str = "en") -> Language:
     models = {
         "english": "en_core_web_sm",
         "german": "de_core_news_sm",
@@ -612,7 +633,7 @@ def load_spacy_model(language="en"):
     return spacy.load(models[language])
 
 
-def extract_entities(text, nlp_model):
+def extract_entities(text: str, nlp_model: Language) -> list[Dict[str, Any]]:
     doc = nlp_model(text)
     entities = [
         {
@@ -626,35 +647,36 @@ def extract_entities(text, nlp_model):
     return entities
 
 
-def user_selects_custom_exclusions():
-    custom_exclusions_input = st.text_area(
+def user_selects_custom_exclusions() -> list[str]:
+    custom_exclusions_input: str = st.text_area(
         "Add custom words to exclude from Named Entity Recognition (comma-separated)",
         "",
     )
-    custom_exclusions = [
+    custom_exclusions: list[str] = [
         word.strip() for word in custom_exclusions_input.split(",") if word.strip()
     ]
 
     return custom_exclusions
 
 
-def filter_excluded_entities(entities, custom_exclusions):
+def filter_excluded_entities(
+    entities: list[Dict[str, Any]], custom_exclusions: list[str]
+) -> Tuple[list[Dict[str, Any]], pd.DataFrame]:
     filtered_entities = [
         ent
         for ent in entities
         if ent["Text"].lower() not in map(str.lower, custom_exclusions)
     ]
     entity_df = pd.DataFrame(filtered_entities)
-    return entity_df
+    return filtered_entities, entity_df
 
 
-def get_entity_types(entity_df):
+def get_entity_types(entity_df: pd.DataFrame) -> list[str]:
     entity_types = sorted(entity_df["Type"].unique(), key=str.casefold)
-
     return entity_types
 
 
-def get_entity_type_explanations(available_entity_types):
+def get_entity_type_explanations(available_entity_types: list[str]) -> Dict[str, str]:
     explanations = {
         entity: spacy.explain(entity) or "No description available"
         for entity in available_entity_types
@@ -663,35 +685,31 @@ def get_entity_type_explanations(available_entity_types):
     return explanations
 
 
-def show_or_hide_entity_explanations(entity_explanations):
+def show_or_hide_entity_explanations(entity_explanations: Dict[str, str]) -> None:
     with st.expander("Show/hide explanations for entity types", expanded=True):
         for entity, explanation in entity_explanations.items():
             st.write(f"**{entity}**: {explanation}")
 
 
 def show_tab_ner_highlighting(
-    text,
-    entity_df,
-    filtered_entities,
-    available_entity_types,
-    tab_ner_highlighting,
-):
+    text: str,
+    entity_df: pd.DataFrame,
+    filtered_entities: list[Dict[str, Any]],
+    available_entity_types: list[str],
+    tab_ner_highlighting: DeltaGenerator,
+) -> None:
     with tab_ner_highlighting:
         if not entity_df.empty:
-            # Default to showing all entities highlighted
-            default_selected_types = available_entity_types
+            default_selected_types: list[str] = available_entity_types
 
-            # Form for entity type selection
             with st.form("entity_type_selection"):
                 selected_entity_types = st.multiselect(
                     "Select entity types to highlight:",
                     options=available_entity_types,
                     default=default_selected_types,  # Default to all entity types selected
                 )
-                # Submit button
                 submitted = st.form_submit_button("Apply")
 
-                # Filter entities based on selected types
             filtered_entities_by_type = (
                 [
                     ent
@@ -708,15 +726,15 @@ def show_tab_ner_highlighting(
                 # Add plain text before the entity
                 if ent["Start"] > last_end:
                     annotated_segments.append(text[last_end : ent["Start"]])
-                    # Add the highlighted entity
+                # Add the highlighted entity
                 annotated_segments.append((ent["Text"], ent["Type"]))
                 last_end = ent["End"]
 
-                # Add remaining plain text after the last entity
+            # Add remaining plain text after the last entity
             if last_end < len(text):
                 annotated_segments.append(text[last_end:])
 
-                # Display annotated text
+            # Display annotated text
             if annotated_segments:
                 annotated_text(*annotated_segments)
             else:
@@ -725,7 +743,7 @@ def show_tab_ner_highlighting(
             st.write("No entities found in the document.")
 
 
-def show_tab_ner_table(entity_df, tab_ner_table):
+def show_tab_ner_table(entity_df: pd.DataFrame, tab_ner_table: DeltaGenerator) -> None:
     with tab_ner_table:
         # Display entities table
         if not entity_df.empty:
@@ -745,8 +763,11 @@ def show_tab_ner_table(entity_df, tab_ner_table):
             st.write("No entities found in the document.")
 
 
-def show_tab_ner_bar_chart(entity_df, tab_ner_bar_chart):
+def show_tab_ner_bar_chart(
+    entity_df: pd.DataFrame, tab_ner_bar_chart: DeltaGenerator
+) -> None:
     with tab_ner_bar_chart:
+        _, col2, _ = st.columns([1, 3, 1])
         if not entity_df.empty:
             # Generate enhanced bar chart
             fig, ax = plt.subplots(figsize=(10, 6))
@@ -774,16 +795,9 @@ def show_tab_ner_bar_chart(entity_df, tab_ner_bar_chart):
             for i, v in enumerate(entity_counts["Count"]):
                 ax.text(i, v + 0.5, str(v), ha="center", fontsize=10)
 
-            st.pyplot(fig)
+            col2.pyplot(fig)
         else:
             st.write("No entities found in the document.")
-
-
-# Download NLTK data (run once)
-@st.cache_data(show_spinner=False)
-def download_nltk_data():
-    nltk.download("stopwords")
-    nltk.download("punkt")
 
 
 if __name__ == "__main__":
