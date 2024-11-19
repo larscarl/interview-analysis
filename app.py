@@ -24,6 +24,7 @@ from textstat import flesch_reading_ease
 UPLOAD_DIR: str = "documents"
 USER_UPLOADS_DIR: str = os.path.join(UPLOAD_DIR, "user_uploads")
 EXAMPLE_DIR: str = os.path.join(UPLOAD_DIR, "IrishWomenWWII")
+RANDOM_SEED = 42
 
 # Ensure the directory exists
 os.makedirs(USER_UPLOADS_DIR, exist_ok=True)
@@ -292,8 +293,7 @@ def show_tab_key_metrics(text: str, tab_key_metrics: DeltaGenerator):
         help="A score representing the readability of the text; higher values indicate easier readability.",
     )
 
-    # Apply styling
-    style_metric_cards()
+    style_metric_cards(border_left_color="#454E9E")
 
 
 def format_with_apostrophe(number: int) -> str:
@@ -394,7 +394,7 @@ def create_tabs_word_frequency() -> (
         tab_word_frequency_bar_chart,
         tab_word_frequency_word_cloud,
         tab_word_frequency_table,
-    ) = st.tabs(["Bar Chart", "Word Cloud", "Table"])
+    ) = st.tabs(["Top Words", "Word Cloud", "Table"])
 
     return (
         tab_word_frequency_bar_chart,
@@ -416,7 +416,7 @@ def show_tab_word_frequency_bar_chart(
         top_words = word_freq_df.head(num_words)
 
         fig, ax = plt.subplots(figsize=(10, 6))
-        ax.bar(top_words["Word"], top_words["Frequency"], color="#408EC6")
+        ax.bar(top_words["Word"], top_words["Frequency"], color="#454E9E")
         ax.set_xlabel("Words", fontsize=12)
         ax.set_ylabel("Frequency", fontsize=12)
         ax.set_title(f"Top {num_words} Words", fontsize=16)
@@ -434,12 +434,29 @@ def show_tab_word_frequency_word_cloud(
     word_freq_df: pd.DataFrame, tab_word_frequency_word_cloud: DeltaGenerator
 ) -> None:
     with tab_word_frequency_word_cloud:
-        col, _ = st.columns([5, 1])
+        col, _, _ = st.columns([5, 2, 2])
+
+        # Slider for the number of words in the word cloud
+        max_words = col.slider(
+            "Number of Words in Word Cloud",
+            min_value=10,
+            max_value=500,
+            value=200,
+            step=10,
+        )
+
+        # Generate the word cloud with the specified number of words
         wordcloud = WordCloud(
-            width=800, height=400, background_color="white"
+            width=600,
+            height=600,
+            background_color="white",
+            max_words=max_words,  # Use the slider value for max_words
+            random_state=RANDOM_SEED,
         ).generate_from_frequencies(
             dict(zip(word_freq_df["Word"], word_freq_df["Frequency"]))
         )
+
+        # Display the word cloud
         col.image(wordcloud.to_array(), use_container_width=True)
 
 
@@ -466,11 +483,6 @@ def show_tab_sentiment_analysis(
     text: str, tab_sentiment_analysis: DeltaGenerator
 ) -> None:
     with tab_sentiment_analysis:
-        # Overall Sentiment
-        # sentiment_score, sentiment_label = analyze_sentiment(text)
-        # st.metric(
-        #     "Overall Sentiment", sentiment_label, f"Polarity: {sentiment_score:.2f}"
-        # )
         (
             tab_sentiment_analysis_sentences,
             tab_sentiment_analysis_timeline,
@@ -511,7 +523,7 @@ def create_tabs_sentiment_analysis() -> (
         [
             "Sentence-Level Sentiment",
             "Polarity Timeline (Interactive)",
-            "Sentiment Polarity Distribution",
+            "Polarity Distribution",
         ]
     )
 
@@ -658,9 +670,9 @@ def show_tab_sentiment_analysis_distribution(
         col, _ = st.columns([5, 1])
         fig, ax = plt.subplots(figsize=(8, 5))
         sentence_sentiments["Polarity"].hist(
-            bins=20, ax=ax, color="#408EC6", edgecolor="black"
+            bins=20, ax=ax, color="#454E9E", edgecolor="black"
         )
-        ax.set_title("Sentiment Polarity Distribution", fontsize=16)
+        # ax.set_title("Sentiment Polarity Distribution", fontsize=16)
         ax.set_xlabel("Polarity", fontsize=12)
         ax.set_ylabel("Frequency", fontsize=12)
         col.pyplot(fig)
@@ -697,7 +709,7 @@ def show_tab_named_entity_recognition(
                 tab_ner_highlighting,
                 tab_ner_table,
                 tab_ner_bar_chart,
-            ) = st.tabs(["Entity Highlighting", "Table", "Bar Chart"])
+            ) = st.tabs(["Highlighting", "Table", "Type Distribution"])
 
             show_tab_ner_highlighting(
                 text,
@@ -784,10 +796,6 @@ def get_entity_type_explanations(available_entity_types: list[str]) -> Dict[str,
     return explanations
 
 
-# def show_or_hide_entity_explanations(entity_explanations: Dict[str, str]) -> None:
-#     with st.expander("Show/hide explanations for entity types", expanded=True):
-#         for entity, explanation in entity_explanations.items():
-#             st.write(f"**{entity}**: {explanation}")
 def show_or_hide_entity_explanations(entity_explanations: Dict[str, str]) -> None:
     with st.expander("Show/hide explanations for entity types", expanded=True):
         # Create two columns dynamically
@@ -797,12 +805,10 @@ def show_or_hide_entity_explanations(entity_explanations: Dict[str, str]) -> Non
         entities = list(entity_explanations.items())
         mid_index = len(entities) // 2 + (len(entities) % 2)
 
-        # Display the first half in the first column
         with col1:
             for entity, explanation in entities[:mid_index]:
                 st.write(f"**{entity}**: {explanation}")
 
-        # Display the second half in the second column
         with col2:
             for entity, explanation in entities[mid_index:]:
                 st.write(f"**{entity}**: {explanation}")
@@ -869,7 +875,7 @@ def show_tab_ner_table(entity_df: pd.DataFrame, tab_ner_table: DeltaGenerator) -
                 data=entity_df,
                 hide_index=False,
                 column_config={
-                    "Text": st.column_config.TextColumn("Text"),
+                    "Text": st.column_config.TextColumn("Entity"),
                     "Type": st.column_config.TextColumn("Type"),
                     "Start": st.column_config.NumberColumn("Start"),
                     "End": st.column_config.NumberColumn("End"),
@@ -894,11 +900,11 @@ def show_tab_ner_bar_chart(
             ax.bar(
                 entity_counts["Entity Type"],
                 entity_counts["Count"],
-                color="#408EC6",
+                color="#454E9E",
             )
             ax.set_xlabel("Entity Types", fontsize=12)
             ax.set_ylabel("Count", fontsize=12)
-            ax.set_title("Entity Type Distribution", fontsize=16)
+            # ax.set_title("Entity Type Distribution", fontsize=16)
 
             # Ensure tick positions match the number of bars
             ax.set_xticks(range(len(entity_counts["Entity Type"])))
@@ -980,7 +986,9 @@ def show_tab_topic_modeling(
         doc_term_matrix = vectorizer.fit_transform(tokenized_text)
 
         # Apply LDA
-        lda_model = LatentDirichletAllocation(n_components=num_topics, random_state=42)
+        lda_model = LatentDirichletAllocation(
+            n_components=num_topics, random_state=RANDOM_SEED
+        )
         lda_model.fit(doc_term_matrix)
 
         # Extract the top words for each topic
