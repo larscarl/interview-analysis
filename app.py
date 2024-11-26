@@ -98,42 +98,42 @@ def set_up_streamlit_app() -> None:
 
 
 def user_uploads_file() -> None:
-    st.sidebar.header("File Selection")
-    uploaded_file = st.sidebar.file_uploader("Upload a .txt file", type=["txt"])
+    with st.sidebar:
+        st.header("File Upload")
+        uploaded_file = st.sidebar.file_uploader("Upload a .txt file", type=["txt"])
 
-    # Save uploaded file
-    if uploaded_file:
-        file_path = os.path.join(USER_UPLOADS_DIR, uploaded_file.name)
-        with open(file_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        st.sidebar.success(f"File '{uploaded_file.name}' uploaded successfully!")
+        # Save uploaded file
+        if uploaded_file:
+            file_path = os.path.join(USER_UPLOADS_DIR, uploaded_file.name)
+            with open(file_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            st.sidebar.success(f"File '{uploaded_file.name}' uploaded successfully!")
 
 
 def user_selects_folder_and_file() -> Tuple[str, str]:
     """Allow the user to first select a folder and then a file within the folder."""
-    st.sidebar.header("Folder and File Selection")
+    with st.sidebar:
+        st.header("Folder and File Selection")
 
-    # Step 1: Select a folder
-    available_folders = list_folders(UPLOAD_DIR)
-    selected_folder = st.sidebar.selectbox(
-        "Select folder", ["None"] + available_folders
-    )
+        # Step 1: Select a folder
+        available_folders = list_folders(UPLOAD_DIR)
+        selected_folder = st.selectbox("Select folder", ["None"] + available_folders)
 
-    if selected_folder == "None":
-        st.sidebar.warning("No folder selected.")
-        return "None", "None"
+        if selected_folder == "None":
+            st.warning("No folder selected.")
+            return "None", "None"
 
-    # Step 2: Select a file within the selected folder
-    folder_path = os.path.join(UPLOAD_DIR, selected_folder)
-    available_files = list_files_in_folder(folder_path)
-    selected_file = st.sidebar.selectbox("Select file", ["None"] + available_files)
+        # Step 2: Select a file within the selected folder
+        folder_path = os.path.join(UPLOAD_DIR, selected_folder)
+        available_files = list_files_in_folder(folder_path)
+        selected_file = st.selectbox("Select file", ["None"] + available_files)
 
-    if selected_file == "None":
-        st.sidebar.warning("No file selected.")
-        return selected_folder, "None"
+        if selected_file == "None":
+            st.warning("No file selected.")
+            return selected_folder, "None"
 
-    st.sidebar.success(f"Selected file: {selected_file} in folder: {selected_folder}")
-    return selected_folder, selected_file
+        st.success(f"Selected file: {selected_file} in folder: {selected_folder}")
+        return selected_folder, selected_file
 
 
 def list_folders(root_dir: str) -> list[str]:
@@ -162,13 +162,14 @@ def list_files_in_folder(folder_path: str) -> list[str]:
 
 def user_selects_language_in_sidebar() -> str:
     """Allow the user to select the language in the sidebar."""
-    st.sidebar.header("Settings")
-    selected_language: str = st.sidebar.selectbox(
-        "Select the language for analysis",
-        list(SUPPORTED_LANGUAGES.keys()),
-        index=0,  # Default to the first language
-    )
-    return SUPPORTED_LANGUAGES[selected_language]  # Return the language code
+    with st.sidebar:
+        st.header("Settings")
+        selected_language: str = st.selectbox(
+            "Select the language for analysis",
+            list(SUPPORTED_LANGUAGES.keys()),
+            index=0,  # Default to the first language
+        )
+        return SUPPORTED_LANGUAGES[selected_language]  # Return the language code
 
 
 def user_selects_info_text_display() -> None:
@@ -236,7 +237,7 @@ def show_tab_full_text(text: str, tab_full_text: DeltaGenerator) -> None:
             "This tab displays the full text of the selected document for easy review. "
             "The text is loaded directly from the uploaded file for detailed inspection before any analysis."
         )
-        st.text(text)
+        st.markdown(text)
 
 
 def show_info_text(text: str) -> None:
@@ -250,7 +251,7 @@ def show_tab_key_metrics(text: str, tab_key_metrics: DeltaGenerator):
         show_info_text(
             "This tab provides an overview of key metrics for the document, including word and sentence counts, "
             "average word length, and readability scores. Metrics are calculated using Python's built-in string "
-            "functions and the `textstat` library for readability analysis, which includes the Flesch Reading Ease score."
+            "functions and the [`textstat`](https://textstat.org/) library for readability analysis, which includes the Flesch Reading Ease score."
         )
         # Compute Metrics
         total_characters = len(text)
@@ -341,9 +342,8 @@ def show_tab_word_frequency(
 ) -> None:
     with tab_word_frequency:
         show_info_text(
-            "Analyze the frequency of words in the document. The text is tokenized using `nltk`, and stopwords "
-            "are removed based on the language selected. Word frequencies are computed using Python's `collections.Counter`, "
-            "and results are visualized as bar charts and word clouds using `matplotlib` and `wordcloud`."
+            "Analyze the frequency of words in the document. The text is tokenized using [`nltk`](https://www.nltk.org/), and stopwords "
+            "are removed based on the language selected. Word frequencies are visualized as bar charts and word clouds using [`matplotlib`](https://matplotlib.org/) and [`wordcloud`](https://amueller.github.io/word_cloud/)."
         )
         col1, col2 = st.columns([0.2, 0.8])
         # Checkbox to enable/disable stopword removal
@@ -527,9 +527,9 @@ def show_tab_sentiment_analysis(
 ) -> None:
     with tab_sentiment_analysis:
         show_info_text(
-            "Analyze the sentiment of the document using `TextBlob`, which provides sentence-level polarity scores. "
-            "Sentiment trends are visualized over time with interactive charts from `plotly`, and the polarity "
-            "distribution is shown using `matplotlib`."
+            "Analyze the sentiment of the document using [`TextBlob`](https://textblob.readthedocs.io/en/dev/), which provides sentence-level polarity scores. "
+            "Sentiment trends are visualized over time with interactive charts from [`plotly`](https://plotly.com/), and the polarity "
+            "distribution is shown using [`matplotlib`](https://matplotlib.org/)."
         )
         (
             tab_sentiment_analysis_timeline,
@@ -733,7 +733,7 @@ def show_tab_named_entity_recognition(
 ) -> None:
     with tab_ner:
         show_info_text(
-            "Extract named entities (e.g., people, organizations, locations) using the `spaCy` library, "
+            "Extract named entities (e.g., people, organizations, locations) using the [`spaCy`](https://spacy.io/) library, "
             "which provides pre-trained language models for entity recognition. Results are visualized as "
             "highlighted text, tables, and bar charts for easier interpretation."
         )
@@ -758,7 +758,7 @@ def show_tab_named_entity_recognition(
                 available_entity_types
             )
 
-            show_or_hide_entity_explanations(explanations)
+            show_or_hide_entity_descriptions(explanations)
 
             (
                 tab_ner_highlighting,
@@ -852,8 +852,8 @@ def get_entity_type_explanations(available_entity_types: list[str]) -> Dict[str,
     return explanations
 
 
-def show_or_hide_entity_explanations(entity_explanations: Dict[str, str]) -> None:
-    with st.expander("Show/hide explanations for entity types", expanded=True):
+def show_or_hide_entity_descriptions(entity_explanations: Dict[str, str]) -> None:
+    with st.expander("Show/hide descriptions of entity types", expanded=True):
         # Create two columns dynamically
         col1, col2 = st.columns(2)
 
@@ -985,9 +985,8 @@ def show_tab_topic_modeling(
 ) -> None:
     with tab_topic_modeling:
         show_info_text(
-            "Discover the main topics in the document using Latent Dirichlet Allocation (LDA) from `scikit-learn`. "
-            "Text preprocessing is handled using `spaCy` to extract nouns, and a document-term matrix is created "
-            "using `CountVectorizer`. The top words for each topic are then displayed for better understanding of the text's themes."
+            "Discover the main topics in the document using Latent Dirichlet Allocation (LDA) from [`scikit-learn`](https://scikit-learn.org/). "
+            "Text preprocessing is handled using [`spaCy`](https://spacy.io/) to extract nouns. "
         )
 
         col1, col2 = st.columns(2)
