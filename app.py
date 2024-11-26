@@ -52,11 +52,15 @@ STOPWORDS: set[str] = set(stopwords.words("english"))
 def main() -> None:
     set_up_streamlit_app()
     user_uploads_file()
-    selected_file: str = user_selects_file()
+
+    selected_folder, selected_file = user_selects_folder_and_file()
     selected_language = user_selects_language_in_sidebar()
     if selected_file != "None":
-        text: str = normalize_line_breaks(load_text_from_selection(selected_file))
-        # text: str = load_text_from_selection(selected_file)
+        text = load_text_from_selection(selected_folder, selected_file)
+
+        if user_chooses_normalization():
+            text = normalize_line_breaks(text)
+
         (
             tab_full_text,
             tab_key_metrics,
@@ -65,6 +69,7 @@ def main() -> None:
             tab_named_entity_recognition,
             tab_topic_modeling,
         ) = create_tabs_text_analysis()
+
         show_tab_full_text(text, tab_full_text)
         show_tab_key_metrics(text, tab_key_metrics)
         show_tab_word_frequency(text, selected_language, tab_word_frequency)
@@ -74,7 +79,7 @@ def main() -> None:
         )
         show_tab_topic_modeling(text, selected_language, tab_topic_modeling)
     else:
-        st.warning("No document selected")
+        st.warning("No document selected.")
 
 
 def set_up_streamlit_app() -> None:
@@ -141,13 +146,55 @@ def user_uploads_file() -> None:
         st.sidebar.success(f"File '{uploaded_file.name}' uploaded successfully!")
 
 
-def user_selects_file() -> str:
-    available_files: list[str] = list_files_in_subfolders(UPLOAD_DIR)
-    selected_file: str = st.sidebar.selectbox(
-        "Choose a document", ["None"] + available_files
+def user_selects_folder_and_file() -> Tuple[str, str]:
+    """Allow the user to first select a folder and then a file within the folder."""
+    st.sidebar.header("Folder and File Selection")
+
+    # Step 1: Select a folder
+    available_folders = list_folders(UPLOAD_DIR)
+    selected_folder = st.sidebar.selectbox(
+        "Select folder", ["None"] + available_folders
     )
 
-    return selected_file
+    if selected_folder == "None":
+        st.sidebar.warning("No folder selected.")
+        return "None", "None"
+
+    # Step 2: Select a file within the selected folder
+    folder_path = os.path.join(UPLOAD_DIR, selected_folder)
+    available_files = list_files_in_folder(folder_path)
+    selected_file = st.sidebar.selectbox("Select file", ["None"] + available_files)
+
+    if selected_file == "None":
+        st.sidebar.warning("No file selected.")
+        return selected_folder, "None"
+
+    st.sidebar.success(f"Selected file: {selected_file} in folder: {selected_folder}")
+    return selected_folder, selected_file
+
+
+def list_folders(root_dir: str) -> list[str]:
+    """List all subfolders in the root directory."""
+    return sorted(
+        [
+            folder
+            for folder in os.listdir(root_dir)
+            if os.path.isdir(os.path.join(root_dir, folder))
+        ],
+        key=str.casefold,
+    )
+
+
+def list_files_in_folder(folder_path: str) -> list[str]:
+    """List all files in a specific folder."""
+    return sorted(
+        [
+            file
+            for file in os.listdir(folder_path)
+            if os.path.isfile(os.path.join(folder_path, file)) and file.endswith(".txt")
+        ],
+        key=str.casefold,
+    )
 
 
 def user_selects_language_in_sidebar() -> str:
@@ -161,23 +208,27 @@ def user_selects_language_in_sidebar() -> str:
     return SUPPORTED_LANGUAGES[selected_language]  # Return the language code
 
 
-def list_files_in_subfolders(root_dir: str) -> list[str]:
-    # Helper function to list files in subfolders
-    file_paths = []
-    for folder_name, subfolders, filenames in os.walk(root_dir):
-        for filename in filenames:
-            if filename.endswith(".txt"):
-                relative_path = os.path.relpath(
-                    os.path.join(folder_name, filename), root_dir
-                )
-                file_paths.append(relative_path)
-    return sorted(file_paths, key=str.casefold)
-
-
-def load_text_from_selection(selected_file: str) -> str:
-    file_path = os.path.join(UPLOAD_DIR, selected_file)
+def load_text_from_selection(selected_folder, selected_file):
+    folder_path = os.path.join(UPLOAD_DIR, selected_folder)
+    file_path = os.path.join(folder_path, selected_file)
     text = read_txt_file(file_path)
     return text
+
+
+def read_txt_file(file_path: str) -> str:
+    with open(file_path, "r", encoding="utf-8") as file:
+        return file.read()
+
+
+def user_chooses_normalization() -> bool:
+    # Add a checkbox for line break normalization
+    normalize_option = st.sidebar.checkbox(
+        "Normalize Line Breaks",
+        value=True,
+        help="Choose whether to normalize line breaks in the text. When enabled, single newlines are converted to double newlines for paragraph separation, and excessive newlines are collapsed to a maximum of two.",
+    )
+
+    return normalize_option
 
 
 def normalize_line_breaks(text: str):
@@ -185,11 +236,6 @@ def normalize_line_breaks(text: str):
     # and collapse excessive newlines (more than two) into a maximum of two.
     text = re.sub(r"\n+", "\n\n", text)
     return text
-
-
-def read_txt_file(file_path: str) -> str:
-    with open(file_path, "r", encoding="utf-8") as file:
-        return file.read()
 
 
 def create_tabs_text_analysis() -> Tuple[
@@ -349,18 +395,18 @@ def user_selects_language_for_stopword_removal(col2: DeltaGenerator) -> str:
     return selected_language
 
 
-def generate_stopwords_from_selection(custom_stopwords_input: str) -> set[str]:
-    return set(
-        custom_stopword.strip() for custom_stopword in custom_stopwords_input.split(",")
-    )
-
-
 def user_selects_custom_stopwords(col2: DeltaGenerator, disabled: bool) -> str:
     custom_stopwords_input: str = col2.text_area(
         "Add custom stopwords (comma-separated)", "", disabled=not disabled
     )
 
     return custom_stopwords_input
+
+
+def generate_stopwords_from_selection(custom_stopwords_input: str) -> set[str]:
+    return set(
+        custom_stopword.strip() for custom_stopword in custom_stopwords_input.split(",")
+    )
 
 
 def get_word_frequency(
@@ -484,16 +530,16 @@ def show_tab_sentiment_analysis(
 ) -> None:
     with tab_sentiment_analysis:
         (
-            tab_sentiment_analysis_sentences,
             tab_sentiment_analysis_timeline,
+            tab_sentiment_analysis_sentences,
             tab_sentiment_analysis_distribution,
         ) = create_tabs_sentiment_analysis()
         sentence_sentiments: pd.DataFrame = generate_sentence_level_sentiments(text)
-        show_tab_sentiment_analysis_sentences(
-            sentence_sentiments, tab_sentiment_analysis_sentences
-        )
         show_tab_sentiment_analysis_timeline(
             sentence_sentiments, tab_sentiment_analysis_timeline
+        )
+        show_tab_sentiment_analysis_sentences(
+            sentence_sentiments, tab_sentiment_analysis_sentences
         )
         show_tab_sentiment_analysis_distribution(
             sentence_sentiments, tab_sentiment_analysis_distribution
@@ -516,20 +562,20 @@ def create_tabs_sentiment_analysis() -> (
     Tuple[DeltaGenerator, DeltaGenerator, DeltaGenerator]
 ):
     (
-        tab_sentiment_analysis_sentences,
         tab_sentiment_analysis_timeline,
+        tab_sentiment_analysis_sentences,
         tab_sentiment_analysis_distribution,
     ) = st.tabs(
         [
-            "Sentence-Level Sentiment",
             "Polarity Timeline (Interactive)",
+            "Sentence-Level Sentiment",
             "Polarity Distribution",
         ]
     )
 
     return (
-        tab_sentiment_analysis_sentences,
         tab_sentiment_analysis_timeline,
+        tab_sentiment_analysis_sentences,
         tab_sentiment_analysis_distribution,
     )
 
@@ -548,9 +594,11 @@ def show_tab_sentiment_analysis_sentences(
 ) -> None:
     with tab_sentiment_analysis_sentences:
         st.dataframe(
-            data=sentence_sentiments,
-            hide_index=False,
+            data=sentence_sentiments.drop(columns=["Smoothed_Polarity"]),
+            hide_index=True,
+            column_order=["Position", "Sentence", "Polarity"],
             column_config={
+                "Position": st.column_config.NumberColumn("Position"),
                 "Sentence": st.column_config.TextColumn("Sentence"),
                 "Polarity": st.column_config.NumberColumn("Polarity", step=0.01),
             },
