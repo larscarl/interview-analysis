@@ -55,6 +55,7 @@ def main() -> None:
 
     selected_folder, selected_file = user_selects_folder_and_file()
     selected_language = user_selects_language_in_sidebar()
+    user_selects_info_text_display()
     if selected_file != "None":
         text = load_text_from_selection(selected_folder, selected_file)
 
@@ -91,44 +92,6 @@ def set_up_streamlit_app() -> None:
         menu_items={
             "Get Help": "https://github.zhaw.ch/shmr/interview-analysis/blob/main/README.md",
             "Report a bug": "mailto:shmr@zhaw.ch",
-            "About": """
-# Interview Analysis 📝
-This app is designed to assist researchers, linguists, and professionals in analyzing interview or text data. It provides various tools for in-depth text analysis, including word frequency, sentiment analysis, and named entity recognition (NER), with support for multiple languages.
-## Features
-- **Upload Your Files**: Upload `.txt` files and analyze them directly in the app.
-- **Text Display and Normalization**: View the entire text with paragraph normalization for better readability.
-- **Word Frequency Analysis**: Identify the most frequently used words in your text, with options to filter stopwords and add custom stopwords.
-- **Word Cloud Visualization**: Generate word clouds for a quick visual representation of word usage.
-- **Sentiment Analysis**:
-  - **Overall Sentiment**: Get the overall sentiment of the document.
-  - **Sentence-Level Analysis**: Explore the sentiment polarity for each sentence in a tabular format.
-  - **Polarity Timeline (Interactive)**: Visualize sentiment changes over the text with an interactive scatter plot and smoothed trendlines.
-  - **Sentiment Distribution**: View the polarity distribution using histograms.
-- **Named Entity Recognition (NER)**:
-  - Extract entities like names, organizations, locations, and more using advanced NLP techniques.
-  - Highlight entities directly in the text with interactive filters for entity types.
-  - Display detailed tables of extracted entities and their occurrences.
-  - View entity type distributions with bar charts.
-- **Multilingual Support**: Analyze texts in English, German, or French.
-## How to Use
-1. Upload a `.txt` file or select from the available example documents.
-2. Choose the analysis options you need:
-   - View the full text.
-   - Explore word frequency data with dynamic charts and tables.
-   - Perform sentiment analysis and interact with visualizations.
-   - Extract and analyze named entities interactively.
-3. Adjust settings dynamically (e.g., stopword filters, smoothing options, or entity type selection).
-## Contact
-- **Help & Documentation**: [Documentation](https://github.zhaw.ch/shmr/interview-analysis/blob/main/README.md)
-- **Report Issues**: Please email [shmr@zhaw.ch](mailto:shmr@zhaw.ch) for support or bug reports.
-## Credits
-Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intelligence. Built with:
-- [Streamlit](https://streamlit.io) for the interactive web app.
-- [NLTK](https://www.nltk.org) and [TextBlob](https://textblob.readthedocs.io/en/dev/) for text analysis.
-- [spaCy](https://spacy.io) for advanced NLP and named entity recognition.
-- [Plotly](https://plotly.com) for interactive visualizations.
-- [WordCloud](https://github.com/amueller/word_cloud) for word cloud generation.
-""",
         },
     )
     st.title("Interview Analysis")
@@ -208,6 +171,15 @@ def user_selects_language_in_sidebar() -> str:
     return SUPPORTED_LANGUAGES[selected_language]  # Return the language code
 
 
+def user_selects_info_text_display() -> None:
+    st.sidebar.checkbox(
+        "Show Info Texts",
+        value=True,
+        help="Toggle this option to enable or disable info texts throughout the app.",
+        key="show_info_texts",
+    )
+
+
 def load_text_from_selection(selected_folder, selected_file):
     folder_path = os.path.join(UPLOAD_DIR, selected_folder)
     file_path = os.path.join(folder_path, selected_file)
@@ -260,86 +232,104 @@ def create_tabs_text_analysis() -> Tuple[
 
 def show_tab_full_text(text: str, tab_full_text: DeltaGenerator) -> None:
     with tab_full_text:
+        show_info_text(
+            "This tab displays the full text of the selected document for easy review. "
+            "The text is loaded directly from the uploaded file for detailed inspection before any analysis."
+        )
         st.text(text)
 
 
+def show_info_text(text: str) -> None:
+    """Helper function to show info text based on the sidebar setting."""
+    if st.session_state.get("show_info_texts", True):
+        st.info(text)
+
+
 def show_tab_key_metrics(text: str, tab_key_metrics: DeltaGenerator):
-    # Compute Metrics
-    total_characters = len(text)
-    total_characters_no_spaces = len(text.replace(" ", ""))
-    paragraphs = text.split("\n\n")
-    paragraph_count = len([p for p in paragraphs if p.strip()])
-    sentences = re.split(r"[.!?]", text)
-    sentences = [s.strip() for s in sentences if s.strip()]
-    sentence_count = len(sentences)
-    average_sentence_length = (
-        sum(len(s.split()) for s in sentences) / sentence_count
-        if sentence_count > 0
-        else 0
-    )
-    words = [word for word in text.split() if word.isalnum()]
-    word_count = len(words)
-    average_word_length = (
-        sum(len(word) for word in words) / word_count if word_count > 0 else 0
-    )
-    unique_words = set(words)
-    vocabulary_richness = len(unique_words) / word_count * 100 if word_count > 0 else 0
+    with tab_key_metrics:
+        show_info_text(
+            "This tab provides an overview of key metrics for the document, including word and sentence counts, "
+            "average word length, and readability scores. Metrics are calculated using Python's built-in string "
+            "functions and the `textstat` library for readability analysis, which includes the Flesch Reading Ease score."
+        )
+        # Compute Metrics
+        total_characters = len(text)
+        total_characters_no_spaces = len(text.replace(" ", ""))
+        paragraphs = text.split("\n\n")
+        paragraph_count = len([p for p in paragraphs if p.strip()])
+        sentences = re.split(r"[.!?]", text)
+        sentences = [s.strip() for s in sentences if s.strip()]
+        sentence_count = len(sentences)
+        average_sentence_length = (
+            sum(len(s.split()) for s in sentences) / sentence_count
+            if sentence_count > 0
+            else 0
+        )
+        words = [word for word in text.split() if word.isalnum()]
+        word_count = len(words)
+        average_word_length = (
+            sum(len(word) for word in words) / word_count if word_count > 0 else 0
+        )
+        unique_words = set(words)
+        vocabulary_richness = (
+            len(unique_words) / word_count * 100 if word_count > 0 else 0
+        )
 
-    try:
-        readability_score = flesch_reading_ease(text)
-    except (ValueError, TypeError) as _:
-        readability_score = "N/A"
+        try:
+            readability_score = flesch_reading_ease(text)
+        except (ValueError, TypeError) as _:
+            readability_score = "N/A"
 
-    col1, col2, col3 = tab_key_metrics.columns(3)
-    col1.metric(
-        label="Word Count",
-        value=format_with_apostrophe(word_count),
-        help="Total number of words in the text, including all valid alphanumeric tokens.",
-    )
-    col1.metric(
-        label="Characters (with spaces)",
-        value=format_with_apostrophe(total_characters),
-        help="Total number of characters in the text, including spaces.",
-    )
-    col1.metric(
-        label="Avg. Word Length (characters)",
-        value=f"{average_word_length:.2f}",
-        help="Average length of a word, calculated as the total number of characters divided by the total number of words.",
-    )
+        col1, col2, col3 = st.columns(3)
+        col1.metric(
+            label="Word Count",
+            value=format_with_apostrophe(word_count),
+            help="Total number of words in the text, including all valid alphanumeric tokens.",
+        )
+        col1.metric(
+            label="Characters (with spaces)",
+            value=format_with_apostrophe(total_characters),
+            help="Total number of characters in the text, including spaces.",
+        )
+        col1.metric(
+            label="Avg. Word Length (characters)",
+            value=f"{average_word_length:.2f}",
+            help="Average length of a word, calculated as the total number of characters divided by the total number of words.",
+        )
 
-    col2.metric(
-        label="Sentence Count",
-        value=format_with_apostrophe(sentence_count),
-        help="Total number of sentences, detected by splitting text on '.', '!', and '?'.",
-    )
-    col2.metric(
-        label="Characters (no spaces)",
-        value=format_with_apostrophe(total_characters_no_spaces),
-        help="Total number of characters in the text, excluding spaces.",
-    )
-    col2.metric(
-        label="Vocabulary Richness",
-        value=f"{vocabulary_richness:.2f}%",
-        help="Percentage of unique words compared to the total word count.",
-    )
+        col2.metric(
+            label="Sentence Count",
+            value=format_with_apostrophe(sentence_count),
+            help="Total number of sentences, detected by splitting text on '.', '!', and '?'.",
+        )
+        col2.metric(
+            label="Characters (no spaces)",
+            value=format_with_apostrophe(total_characters_no_spaces),
+            help="Total number of characters in the text, excluding spaces.",
+        )
+        col2.metric(
+            label="Vocabulary Richness",
+            value=f"{vocabulary_richness:.2f}%",
+            help="Percentage of unique words compared to the total word count.",
+        )
 
-    col3.metric(
-        label="Paragraph Count",
-        value=format_with_apostrophe(paragraph_count),
-        help="Total number of paragraphs, detected by splitting the text on double newlines.",
-    )
-    col3.metric(
-        label="Avg. Sentence Length (words)",
-        value=f"{average_sentence_length:.2f}",
-        help="Average length of a sentence, calculated as the total number of words divided by the total number of sentences.",
-    )
-    col3.metric(
-        label="Flesch Reading Ease",
-        value=readability_score if readability_score != "N/A" else "N/A",
-        help="A score representing the readability of the text; higher values indicate easier readability.",
-    )
+        col3.metric(
+            label="Paragraph Count",
+            value=format_with_apostrophe(paragraph_count),
+            help="Total number of paragraphs, detected by splitting the text on double newlines.",
+        )
+        col3.metric(
+            label="Avg. Sentence Length (words)",
+            value=f"{average_sentence_length:.2f}",
+            help="Average length of a sentence, calculated as the total number of words divided by the total number of sentences.",
+        )
+        col3.metric(
+            label="Flesch Reading Ease",
+            value=readability_score if readability_score != "N/A" else "N/A",
+            help="A score representing the readability of the text; higher values indicate easier readability.",
+        )
 
-    style_metric_cards(border_left_color="#454E9E")
+        style_metric_cards(border_left_color="#454E9E")
 
 
 def format_with_apostrophe(number: int) -> str:
@@ -350,6 +340,11 @@ def show_tab_word_frequency(
     text: str, language_code: str, tab_word_frequency: DeltaGenerator
 ) -> None:
     with tab_word_frequency:
+        show_info_text(
+            "Analyze the frequency of words in the document. The text is tokenized using `nltk`, and stopwords "
+            "are removed based on the language selected. Word frequencies are computed using Python's `collections.Counter`, "
+            "and results are visualized as bar charts and word clouds using `matplotlib` and `wordcloud`."
+        )
         col1, col2 = st.columns([0.2, 0.8])
         # Checkbox to enable/disable stopword removal
         remove_stopwords: bool = col1.checkbox("Remove Stopwords", value=True)
@@ -397,7 +392,9 @@ def user_selects_language_for_stopword_removal(col2: DeltaGenerator) -> str:
 
 def user_selects_custom_stopwords(col2: DeltaGenerator, disabled: bool) -> str:
     custom_stopwords_input: str = col2.text_area(
-        "Add custom stopwords (comma-separated)", "", disabled=not disabled
+        "Add custom stopwords (comma-separated): press command+enter to apply",
+        "",
+        disabled=not disabled,
     )
 
     return custom_stopwords_input
@@ -529,6 +526,11 @@ def show_tab_sentiment_analysis(
     text: str, tab_sentiment_analysis: DeltaGenerator
 ) -> None:
     with tab_sentiment_analysis:
+        show_info_text(
+            "Analyze the sentiment of the document using `TextBlob`, which provides sentence-level polarity scores. "
+            "Sentiment trends are visualized over time with interactive charts from `plotly`, and the polarity "
+            "distribution is shown using `matplotlib`."
+        )
         (
             tab_sentiment_analysis_timeline,
             tab_sentiment_analysis_sentences,
@@ -730,6 +732,11 @@ def show_tab_named_entity_recognition(
     text: str, language_code: str, tab_ner: DeltaGenerator
 ) -> None:
     with tab_ner:
+        show_info_text(
+            "Extract named entities (e.g., people, organizations, locations) using the `spaCy` library, "
+            "which provides pre-trained language models for entity recognition. Results are visualized as "
+            "highlighted text, tables, and bar charts for easier interpretation."
+        )
         nlp: Language = load_spacy_model(language_code)
 
         entities: list[Dict[str, Any]] = extract_entities(text, nlp)
@@ -808,7 +815,8 @@ def extract_entities(text: str, nlp_model: Language) -> list[Dict[str, Any]]:
 
 def user_selects_custom_exclusions() -> list[str]:
     custom_exclusions_input: str = st.text_area(
-        "Add custom words to exclude from Named Entity Recognition (comma-separated)",
+        "Add custom words to exclude from Named Entity Recognition (comma-separated): "
+        "press command+enter to apply",
         "",
     )
     custom_exclusions: list[str] = [
@@ -976,8 +984,10 @@ def show_tab_topic_modeling(
     text: str, language_code: str, tab_topic_modeling: DeltaGenerator
 ) -> None:
     with tab_topic_modeling:
-        st.write(
-            "Extracted topics based on the uploaded text document (using nouns only)."
+        show_info_text(
+            "Discover the main topics in the document using Latent Dirichlet Allocation (LDA) from `scikit-learn`. "
+            "Text preprocessing is handled using `spaCy` to extract nouns, and a document-term matrix is created "
+            "using `CountVectorizer`. The top words for each topic are then displayed for better understanding of the text's themes."
         )
 
         col1, col2 = st.columns(2)
@@ -1002,7 +1012,9 @@ def show_tab_topic_modeling(
 
         # Input for custom stopwords
         custom_stopwords_input = st.text_area(
-            "Add custom stopwords for topic modeling (comma-separated)", ""
+            "Add custom stopwords for topic modeling (comma-separated): "
+            "press command+enter to apply",
+            "",
         )
         custom_stopwords = [
             stopword.strip().lower()
