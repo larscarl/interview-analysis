@@ -42,6 +42,7 @@ SUPPORTED_LANGUAGES: dict[str, str] = {
 def download_nltk_data() -> None:
     nltk.download("stopwords")
     nltk.download("punkt")
+    nltk.download("punkt_tab")
 
 
 download_nltk_data()
