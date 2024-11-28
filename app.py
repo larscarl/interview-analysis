@@ -20,7 +20,6 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
 from textstat import flesch_reading_ease
 
-# Constants
 UPLOAD_DIR: str = "documents"
 USER_UPLOADS_DIR: str = os.path.join(UPLOAD_DIR, "user_uploads")
 EXAMPLE_DIR: str = os.path.join(UPLOAD_DIR, "IrishWomenWWII")
@@ -30,7 +29,6 @@ RANDOM_SEED = 42
 os.makedirs(USER_UPLOADS_DIR, exist_ok=True)
 os.makedirs(EXAMPLE_DIR, exist_ok=True)
 
-# Supported languages and their corresponding stopwords in NLTK
 SUPPORTED_LANGUAGES: dict[str, str] = {
     "English": "english",
     "German": "german",
@@ -103,7 +101,6 @@ def user_uploads_file() -> None:
         st.header("File Upload")
         uploaded_file = st.sidebar.file_uploader("Upload a .txt file", type=["txt"])
 
-        # Save uploaded file
         if uploaded_file:
             file_path = os.path.join(USER_UPLOADS_DIR, uploaded_file.name)
             with open(file_path, "wb") as f:
@@ -116,7 +113,6 @@ def user_selects_folder_and_file() -> Tuple[str, str]:
     with st.sidebar:
         st.header("Folder and File Selection")
 
-        # Step 1: Select a folder
         available_folders = list_folders(UPLOAD_DIR)
         selected_folder = st.selectbox("Select folder", ["None"] + available_folders)
 
@@ -124,7 +120,6 @@ def user_selects_folder_and_file() -> Tuple[str, str]:
             st.warning("No folder selected.")
             return "None", "None"
 
-        # Step 2: Select a file within the selected folder
         folder_path = os.path.join(UPLOAD_DIR, selected_folder)
         available_files = list_files_in_folder(folder_path)
         selected_file = st.selectbox("Select file", ["None"] + available_files)
@@ -170,7 +165,7 @@ def user_selects_language_in_sidebar() -> str:
             list(SUPPORTED_LANGUAGES.keys()),
             index=0,  # Default to the first language
         )
-        return SUPPORTED_LANGUAGES[selected_language]  # Return the language code
+        return SUPPORTED_LANGUAGES[selected_language]
 
 
 def user_selects_info_text_display() -> None:
@@ -195,7 +190,6 @@ def read_txt_file(file_path: str) -> str:
 
 
 def user_chooses_normalization() -> bool:
-    # Add a checkbox for line break normalization
     normalize_option = st.sidebar.checkbox(
         "Normalize Line Breaks",
         value=True,
@@ -254,7 +248,6 @@ def show_tab_key_metrics(text: str, tab_key_metrics: DeltaGenerator):
             "average word length, and readability scores. Metrics are calculated using Python's built-in string "
             "functions and the [`textstat`](https://textstat.org/) library for readability analysis, which includes the Flesch Reading Ease score."
         )
-        # Compute Metrics
         total_characters = len(text)
         total_characters_no_spaces = len(text.replace(" ", ""))
         paragraphs = text.split("\n\n")
@@ -347,7 +340,7 @@ def show_tab_word_frequency(
             "are removed based on the language selected. Word frequencies are visualized as bar charts and word clouds using [`matplotlib`](https://matplotlib.org/) and [`wordcloud`](https://amueller.github.io/word_cloud/)."
         )
         col1, col2 = st.columns([0.2, 0.8])
-        # Checkbox to enable/disable stopword removal
+
         remove_stopwords: bool = col1.checkbox("Remove Stopwords", value=True)
 
         custom_stopwords_input: str = user_selects_custom_stopwords(
@@ -364,7 +357,6 @@ def show_tab_word_frequency(
             language_code = None
             custom_stopwords = None
 
-            # Compute word frequency
         word_freq_df: pd.DataFrame = get_word_frequency(
             text,
             language=language_code,
@@ -413,11 +405,9 @@ def get_word_frequency(
     remove_stopwords: bool = False,
     custom_stopwords: set[str] = None,
 ) -> pd.DataFrame:
-    # Function to get word frequency with optional stopwords removal
     words: list[str] = word_tokenize(text.lower())
     stop_words: set[str] = set(stopwords.words(language)) if remove_stopwords else set()
 
-    # Add custom stopwords if provided
     if custom_stopwords:
         stop_words.update(custom_stopwords)
 
@@ -452,11 +442,11 @@ def show_tab_word_frequency_bar_chart(
 ) -> None:
     with tab_word_frequency_bar_chart:
         col, _ = st.columns([5, 1])
-        # Allow user to specify the number of words to display
+
         num_words = col.slider(
             "Number of Words to Display", min_value=5, max_value=50, value=10
         )
-        # Generate and display enhanced bar chart
+
         top_words = word_freq_df.head(num_words)
 
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -465,7 +455,6 @@ def show_tab_word_frequency_bar_chart(
         ax.set_ylabel("Frequency", fontsize=12)
         ax.set_title(f"Top {num_words} Words", fontsize=16)
 
-        # Ensure tick positions match the number of bars
         ax.set_xticks(range(len(top_words["Word"])))
         ax.set_xticklabels(top_words["Word"], rotation=45, ha="right", fontsize=10)
 
@@ -480,7 +469,6 @@ def show_tab_word_frequency_word_cloud(
     with tab_word_frequency_word_cloud:
         col, _, _ = st.columns([5, 2, 2])
 
-        # Slider for the number of words in the word cloud
         max_words = col.slider(
             "Number of Words in Word Cloud",
             min_value=10,
@@ -489,18 +477,16 @@ def show_tab_word_frequency_word_cloud(
             step=10,
         )
 
-        # Generate the word cloud with the specified number of words
         wordcloud = WordCloud(
             width=600,
             height=600,
             background_color="white",
-            max_words=max_words,  # Use the slider value for max_words
+            max_words=max_words,
             random_state=RANDOM_SEED,
         ).generate_from_frequencies(
             dict(zip(word_freq_df["Word"], word_freq_df["Frequency"]))
         )
 
-        # Display the word cloud
         col.image(wordcloud.to_array(), use_container_width=True)
 
 
@@ -508,10 +494,7 @@ def show_tab_word_frequency_table(
     word_freq_df: pd.DataFrame, tab_word_frequency_table: DeltaGenerator
 ) -> None:
     with tab_word_frequency_table:
-        # Add a column for the length of each word
         word_freq_df["Length"] = word_freq_df["Word"].apply(len)
-
-        # Display the dataframe with the added column
         st.dataframe(
             data=word_freq_df,
             hide_index=True,
@@ -612,10 +595,8 @@ def show_tab_sentiment_analysis_timeline(
     sentence_sentiments: pd.DataFrame, tab_sentiment_analysis_timeline: DeltaGenerator
 ) -> None:
     with tab_sentiment_analysis_timeline:
-        # Extract polarity values
         sentence_sentiments["Position"] = range(1, len(sentence_sentiments) + 1)
 
-        # User option for smoothing
         smoothing_window = st.slider(
             "Smoothing Window (Number of Sentences)",
             min_value=1,
@@ -624,17 +605,14 @@ def show_tab_sentiment_analysis_timeline(
             step=1,
         )
 
-        # Compute moving average for polarity
         sentence_sentiments["Smoothed_Polarity"] = (
             sentence_sentiments["Polarity"]
             .rolling(window=smoothing_window, min_periods=1, center=True)
             .mean()
         )
 
-        # Create an interactive scatter plot with hover tooltips
         fig = go.Figure()
 
-        # Add scatter points for original polarity
         fig.add_trace(
             go.Scatter(
                 x=sentence_sentiments["Position"],
@@ -649,9 +627,9 @@ def show_tab_sentiment_analysis_timeline(
                     colorbar=dict(
                         title="Polarity",
                         titleside="right",
-                        x=1.03,  # Position closer to the plot
+                        x=1.03,
                         y=0.5,
-                        thickness=20,  # Adjust thickness
+                        thickness=20,
                     ),
                 ),
                 name="Original Polarity",
@@ -666,7 +644,6 @@ def show_tab_sentiment_analysis_timeline(
             )
         )
 
-        # Add smoothed polarity as a line
         fig.add_trace(
             go.Scatter(
                 x=sentence_sentiments["Position"],
@@ -677,26 +654,25 @@ def show_tab_sentiment_analysis_timeline(
             )
         )
 
-        # Customize layout
         fig.update_layout(
             xaxis=dict(
                 title="Sentence Position",
                 title_font=dict(size=14),
                 tickfont=dict(size=12),
                 range=[
-                    0,
+                    0,  # Ensure x-axis starts at 0
                     len(sentence_sentiments["Position"]),
-                ],  # Ensure x-axis starts at 0
+                ],
             ),
             yaxis=dict(
                 title="Polarity",
                 title_font=dict(size=14),
                 tickfont=dict(size=12),
-                gridcolor="lightgray",  # Horizontal grid lines
-                gridwidth=1,  # Thickness of grid lines
-                tickvals=[-1, -0.5, 0, 0.5, 1],  # Custom tick positions
-                ticktext=["-1", "-0.5", "0", "0.5", "1"],  # Tick labels
-                showgrid=True,  # Explicitly enable gridlines
+                gridcolor="lightgray",
+                gridwidth=1,
+                tickvals=[-1, -0.5, 0, 0.5, 1],
+                ticktext=["-1", "-0.5", "0", "0.5", "1"],
+                showgrid=True,
             ),
             template="simple_white",
             legend=dict(
@@ -709,7 +685,6 @@ def show_tab_sentiment_analysis_timeline(
             hovermode="x unified",
         )
 
-        # Render plot in Streamlit
         st.plotly_chart(fig, use_container_width=True)
 
 
@@ -723,7 +698,6 @@ def show_tab_sentiment_analysis_distribution(
         sentence_sentiments["Polarity"].hist(
             bins=20, ax=ax, color="#454E9E", edgecolor="black"
         )
-        # ax.set_title("Sentiment Polarity Distribution", fontsize=16)
         ax.set_xlabel("Polarity", fontsize=12)
         ax.set_ylabel("Frequency", fontsize=12)
         col.pyplot(fig)
@@ -750,7 +724,7 @@ def show_tab_named_entity_recognition(
                 entities, custom_exclusions
             )
         else:
-            filtered_entities: list[Dict[str, Any]] = entities  # No exclusions applied
+            filtered_entities: list[Dict[str, Any]] = entities
 
         if not entity_df.empty:
             available_entity_types: list[str] = get_entity_types(entity_df)
@@ -855,10 +829,8 @@ def get_entity_type_explanations(available_entity_types: list[str]) -> Dict[str,
 
 def show_or_hide_entity_descriptions(entity_explanations: Dict[str, str]) -> None:
     with st.expander("Show/hide descriptions of entity types", expanded=True):
-        # Create two columns dynamically
         col1, col2 = st.columns(2)
 
-        # Split the entity explanations into two equal parts
         entities = list(entity_explanations.items())
         mid_index = len(entities) // 2 + (len(entities) % 2)
 
@@ -904,18 +876,14 @@ def show_tab_ner_highlighting(
             annotated_segments = []
             last_end = 0
             for ent in filtered_entities_by_type:
-                # Add plain text before the entity
                 if ent["Start"] > last_end:
                     annotated_segments.append(text[last_end : ent["Start"]])
-                # Add the highlighted entity
                 annotated_segments.append((ent["Text"], ent["Type"]))
                 last_end = ent["End"]
 
-            # Add remaining plain text after the last entity
             if last_end < len(text):
                 annotated_segments.append(text[last_end:])
 
-            # Display annotated text
             if annotated_segments:
                 annotated_text(*annotated_segments)
             else:
@@ -926,7 +894,6 @@ def show_tab_ner_highlighting(
 
 def show_tab_ner_table(entity_df: pd.DataFrame, tab_ner_table: DeltaGenerator) -> None:
     with tab_ner_table:
-        # Display entities table
         if not entity_df.empty:
             st.dataframe(
                 data=entity_df,
@@ -950,7 +917,6 @@ def show_tab_ner_bar_chart(
     with tab_ner_bar_chart:
         col, _ = st.columns([5, 1])
         if not entity_df.empty:
-            # Generate enhanced bar chart
             fig, ax = plt.subplots(figsize=(10, 6))
             entity_counts = entity_df["Type"].value_counts().reset_index()
             entity_counts.columns = ["Entity Type", "Count"]
@@ -961,9 +927,7 @@ def show_tab_ner_bar_chart(
             )
             ax.set_xlabel("Entity Types", fontsize=12)
             ax.set_ylabel("Count", fontsize=12)
-            # ax.set_title("Entity Type Distribution", fontsize=16)
 
-            # Ensure tick positions match the number of bars
             ax.set_xticks(range(len(entity_counts["Entity Type"])))
             ax.set_xticklabels(
                 entity_counts["Entity Type"],
@@ -972,7 +936,6 @@ def show_tab_ner_bar_chart(
                 fontsize=10,
             )
 
-            # Add text annotations above the bars
             for i, v in enumerate(entity_counts["Count"]):
                 ax.text(i, v + 0.5, str(v), ha="center", fontsize=10)
 
@@ -991,7 +954,7 @@ def show_tab_topic_modeling(
         )
 
         col1, col2 = st.columns(2)
-        # User input for the number of topics
+
         num_topics = col1.number_input(
             "Select the number of topics", min_value=2, max_value=10, value=5
         )
@@ -1010,7 +973,6 @@ def show_tab_topic_modeling(
         else:
             text_cleaned = text
 
-        # Input for custom stopwords
         custom_stopwords_input = st.text_area(
             "Add custom stopwords for topic modeling (comma-separated): "
             "press command+enter to apply",
@@ -1022,21 +984,18 @@ def show_tab_topic_modeling(
             if stopword.strip()
         ]
 
-        # Tokenize and preprocess the text to include only nouns
         tokenized_text = preprocess_text_for_topic_modeling(text_cleaned, language_code)
 
         if not tokenized_text:
             st.warning("The text is too short or empty for topic modeling.")
             return
 
-        # Create a document-term matrix
         vectorizer = CountVectorizer(
             stop_words=stopwords.words(language_code),
             max_df=0.95,
             min_df=2,
         )
 
-        # Merge default and custom stopwords
         if custom_stopwords:
             all_stopwords = list(
                 set(vectorizer.get_stop_words()).union(custom_stopwords)
@@ -1045,16 +1004,13 @@ def show_tab_topic_modeling(
 
         doc_term_matrix = vectorizer.fit_transform(tokenized_text)
 
-        # Apply LDA
         lda_model = LatentDirichletAllocation(
             n_components=num_topics, random_state=RANDOM_SEED
         )
         lda_model.fit(doc_term_matrix)
 
-        # Extract the top words for each topic
         topics = extract_topics(lda_model, vectorizer, top_n_words=num_words)
 
-        # Display the topics
         st.write("### Topics:")
         for topic_num, topic_words in topics.items():
             st.write(f"**Topic {topic_num + 1}:** {', '.join(topic_words)}")
@@ -1062,18 +1018,15 @@ def show_tab_topic_modeling(
 
 def preprocess_text_for_topic_modeling(text: str, language_code: str) -> list[str]:
     """Preprocess the text for topic modeling by including only nouns."""
-    # Load spaCy model for the given language
     nlp = load_spacy_model(language_code)
     doc = nlp(text)
 
-    # Filter only nouns and return cleaned sentences
     cleaned_sentences = [
         " ".join([token.text.lower() for token in sentence if token.pos_ == "NOUN"])
         for sentence in doc.sents
         if sentence.text.strip()
     ]
 
-    # Remove empty strings
     cleaned_sentences = [sentence for sentence in cleaned_sentences if sentence.strip()]
     return cleaned_sentences
 
