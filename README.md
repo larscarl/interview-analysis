@@ -1,6 +1,6 @@
 # Interview Analysis 📝
 
-This app is designed to assist researchers, linguists, and professionals in analyzing interview or text data. It provides various tools for in-depth text analysis, including word frequency, sentiment analysis, and named entity recognition (NER), with support for multiple languages.
+This app is designed to provide assistance for analyzing interview or text data. It provides various tools for in-depth text analysis, including word frequency, sentiment analysis, and named entity recognition (NER), with support for multiple languages.
 
 ## Features
 
@@ -150,7 +150,7 @@ pyenv deactivate
 
 ## Credits
 
-Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intelligence. Built with:
+Developed by [Lars Schmid](mailto:shmr@zhaw.ch), research assistant at [ZHAW Centre for Artificial Intelligence](https://www.zhaw.ch/en/engineering/institutes-centres/cai/). Built with:
 
 - [Streamlit](https://streamlit.io) for the interactive web app.
 - [NLTK](https://www.nltk.org) and [TextBlob](https://textblob.readthedocs.io/en/dev/) for text analysis.
@@ -158,4 +158,3 @@ Developed by Lars Schmid, research assistant at ZHAW Centre for Artificial Intel
 - [Plotly](https://plotly.com) for interactive visualizations.
 - [WordCloud](https://github.com/amueller/word_cloud) for word cloud generation.
 
-For help, send an email to [shmr@zhaw.ch](mailto:shmr@zhaw.ch).
