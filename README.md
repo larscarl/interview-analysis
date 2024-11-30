@@ -29,7 +29,7 @@ This section provides detailed steps to install and run the app in your local en
 Open your terminal and navigate to the directory where you want to install the app. Then, clone the repository by running:
 
 ```
-git clone https://github.zhaw.ch/shmr/interview-analysis.git
+git clone https://github.com/larscarl/interview-analysis.git
 cd  interview-analysis
 ```
 
@@ -145,7 +145,7 @@ pyenv deactivate
 
 ## Contact
 
-- **Help & Documentation**: [Documentation](https://github.zhaw.ch/shmr/interview-analysis/blob/main/README.md)
+- **Help & Documentation**: [Documentation](https://github.com/larscarl/interview-analysis/blob/main/README.md)
 - **Report Issues**: Please email [shmr@zhaw.ch](mailto:shmr@zhaw.ch) for support or bug reports.
 
 ## Credits
@@ -157,4 +157,3 @@ Developed by [Lars Schmid](mailto:shmr@zhaw.ch), research assistant at [ZHAW Cen
 - [spaCy](https://spacy.io) for advanced NLP and named entity recognition.
 - [Plotly](https://plotly.com) for interactive visualizations.
 - [WordCloud](https://github.com/amueller/word_cloud) for word cloud generation.
-
