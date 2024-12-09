@@ -46,10 +46,11 @@ Choose one of the following methods to create a new Python environment. In this 
 pyenv install 3.10.15
 ```
 
-3. Create a virtual environment:
+3. Create a virtual environment and activate it:
 
 ```
 pyenv virtualenv 3.10.15 interview-analysis
+pyenv activate interview-analysis
 ```
 
 #### B. Using conda
